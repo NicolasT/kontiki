@@ -1,0 +1,37 @@
+Name:                kontiki
+Version:             0.0.0.0
+Synopsis:            An implementation of the Raft consensus protocol
+-- Description:         
+Homepage:            http://github.com/NicolasT/kontiki
+
+Author:              Nicolas Trangez
+Maintainer:          ikke@nicolast.be
+Copyright:           (c) 2013, Nicolas Trangez
+
+License:             LGPL-2.1
+License-File:        LICENSE
+
+Category:            Network
+Build-Type:          Simple
+Cabal-Version:       >=1.8
+
+Library
+  Exposed-Modules:     Network.Kontiki.Raft
+  -- Other-Modules:       
+  Build-Depends:       base >= 4 && < 5
+                     , bytestring
+                     , containers
+  Hs-Source-Dirs:      src
+  Ghc-Options:         -Wall -fwarn-incomplete-patterns
+
+Executable kontiki-demo
+  Main-Is:             demo.hs
+  Build-Depends:       base >= 4 && < 5
+                     , stm
+                     , random
+                     , bytestring
+                     , containers
+                     , hslogger
+                     , kontiki
+  Hs-Source-Dirs:      bin
+  Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
