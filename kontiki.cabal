@@ -19,6 +19,7 @@ Library
   Exposed-Modules:     Network.Kontiki.Raft
   -- Other-Modules:       
   Build-Depends:       base >= 4 && < 5
+                     , mtl
                      , bytestring
                      , containers
   Hs-Source-Dirs:      src

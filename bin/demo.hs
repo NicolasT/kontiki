@@ -4,9 +4,13 @@ module Main (main) where
 
 import Control.Monad
 
+import Data.Monoid
+
 import qualified Data.Set as Set
 
 import Data.ByteString.Char8 (unpack)
+import qualified Data.ByteString.Builder as B
+import qualified Data.ByteString.Lazy.Char8 as LBS8
 
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -43,6 +47,10 @@ runNode config others node0 = do
             oldN = R.stateName state
             newN = R.stateName state'
 
+        debugM name $ name ++ " @ " ++ show state'
+        debugM name $ name ++ ": " ++ show commands
+
+        node' <- foldM runCommand node commands
         when (oldN /= newN || R.stateTerm state /= R.stateTerm state') $
             infoM name $
                 name ++ ": " ++
@@ -50,10 +58,6 @@ runNode config others node0 = do
                 " -> " ++
                 newN ++ "@" ++ show (R.stateTerm state')
 
-        debugM name $ name ++ " @ " ++ show state'
-        debugM name $ name ++ ": " ++ show commands
-
-        node' <- foldM runCommand node commands
         loop node' state'
 
     name :: String
@@ -99,6 +103,12 @@ runNode config others node0 = do
                     atomically $ writeTChan (nodeChannel node) (ETimeout ETHeartbeat)
 
                 return node { nodeHeartbeatTID = Just tid}
+
+        CLog b -> do
+            infoM name $ LBS8.unpack
+                       $ B.toLazyByteString
+                       $ (B.byteString (nodeName node) <> B.byteString ": " <> b)
+            return node
 
 main :: IO ()
 main = do

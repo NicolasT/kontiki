@@ -2,7 +2,10 @@
              StandaloneDeriving,
              KindSignatures,
              DataKinds,
-             RecordWildCards #-}
+             RecordWildCards,
+             GeneralizedNewtypeDeriving,
+             DeriveFunctor,
+             OverloadedStrings #-}
 
 module Network.Kontiki.Raft (
       Config(..)
@@ -13,8 +16,6 @@ module Network.Kontiki.Raft (
     , Command(..)
     , Event(..)
     , ETimeout(..)
-    , Step
-    , Handler
     , handle
     , Log
     , emptyLog
@@ -27,19 +28,27 @@ module Network.Kontiki.Raft (
 -- TODO Implement proper consensus-based lease extension
 -- TODO Get rid of tons of code duplication
 -- TODO Cleanup export list
--- TODO Wrap stuff into something like
---     Transition m r a = ReaderT Config (WriterT Command (StateT State m a) a) a
--- or whatever
--- TODO Given the above, add a 'CLog :: String -> Command' command to track things
 -- TODO Add Binary instances for, well, about everything
 -- TODO Add Arbitrary instances for, well, about everything
+
+import Prelude hiding (log)
 
 import Data.Word
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Data.Monoid
+
+import Control.Monad.Reader (MonadReader, ReaderT)
+import qualified Control.Monad.Reader as R
+import Control.Monad.Writer (MonadWriter, Writer)
+import qualified Control.Monad.Writer as W
+
 import Data.ByteString (ByteString)
+import Data.ByteString.Char8 ()
+import Data.ByteString.Builder (Builder)
+import qualified Data.ByteString.Builder as B
 
 -- | Representation of a `Term'.
 newtype Term = Term Word64
@@ -149,9 +158,8 @@ instance Eq a => Eq (SomeState a) where
     WrapState _ == WrapState _ = False
 
 
--- | Utility to wrap the first `State' element of a tuple.
-wrapFst :: (State s a, b) -> (SomeState a, b)
-wrapFst (a, b) = (WrapState a, b)
+wrap :: State s a -> SomeState a
+wrap = WrapState
 
 
 -- | Configuration
@@ -183,7 +191,8 @@ data Event = EMessage NodeId Message
 data Command = CBroadcast Message
              | CSend NodeId Message
              | CResetTimeout CTimeout
-  deriving (Show, Eq)
+             | CLog Builder
+  deriving (Show)
 
 
 -- | Representation of a `RequestVote' message.
@@ -214,210 +223,341 @@ data Message = MRequestVote RequestVote
   deriving (Show, Eq)
 
 
--- | A `Step' takes an @f a@ (e.g. @Follower a@) into a @t a@ (e.g.
--- @Candidate a@) and a set of `Command's to execute.
-type Step f t a = (f a) -> (t a, [Command])
--- | A `Handler' takes some `Config' and an `Event', then runs a `Step'
--- from `f' (e.g. `Follower') to `SomeState' given command type `a'.
-type Handler f a = Config -> Event -> Step f SomeState a
+newtype Transition r = T { unTransition :: ReaderT Config (Writer [Command]) r }
+  deriving ( Functor
+           , Monad
+           , MonadReader Config
+           , MonadWriter [Command]
+           )
 
+type Handler f a = Event -> f a -> Transition (SomeState a)
+
+runTransition :: Handler f a -> Config -> f a -> Event -> (SomeState a, [Command])
+runTransition h c s e = W.runWriter $ flip R.runReaderT c $ unTransition $ h e s
+
+getConfig :: Transition Config
+getConfig = R.ask
+
+getNodeId :: Transition NodeId
+getNodeId = configNodeId `fmap` getConfig
+
+-- | Utility to determine whether a set of votes forms a majority.
+isMajority :: Set NodeId -> Transition Bool
+isMajority votes = do
+    cfg <- getConfig
+    return $ Set.size votes >= Set.size (configNodes cfg) `div` 2 + 1
+
+exec :: Command -> Transition ()
+exec c = W.tell [c]
 
 -- | Top-level handler for `SomeState' input states.
-handle :: Handler SomeState a
+handle :: Config -> Event -> SomeState a -> (SomeState a, [Command])
 handle cfg evt state = case state of
-    WrapState state'@Follower{} -> handleFollower cfg evt state'
-    WrapState state'@Candidate{} -> handleCandidate cfg evt state'
-    WrapState state'@Leader{} -> handleLeader cfg evt state'
+    WrapState state'@Follower{} ->
+        runTransition handleFollower cfg state' evt
+    WrapState state'@Candidate{} ->
+        runTransition handleCandidate cfg state' evt
+    WrapState state'@Leader{} ->
+        runTransition handleLeader cfg state' evt
+
+resetElectionTimeout :: Transition ()
+resetElectionTimeout = do
+    cfg <- getConfig
+    exec $ CResetTimeout
+         $ CTElection (configElectionTimeout cfg, 2 * configElectionTimeout cfg)
+
+resetHeartbeatTimeout :: Transition ()
+resetHeartbeatTimeout = do
+    cfg <- getConfig
+    exec $ CResetTimeout
+         $ CTHeartbeat $ configHeartbeatTimeout cfg
+
+broadcast :: Message -> Transition ()
+broadcast = exec . CBroadcast
+
+send :: NodeId -> Message -> Transition ()
+send n m = exec $ CSend n m
+
+logS :: ByteString -> Transition ()
+logS = exec . CLog . B.byteString
+
+log :: [Builder] -> Transition ()
+log = exec . CLog . mconcat
+
+logTerm :: Term -> Builder
+logTerm (Term t) = B.string8 $ show t
 
 
--- | Handler for events when in `Follower' state.
 handleFollower :: Handler Follower a
-handleFollower Config{..} evt state@(Follower fs) = case evt of
+handleFollower evt state0@(Follower fs0) = case evt of
     EMessage sender msg -> case msg of
         MRequestVote m -> handleRequestVote sender m
-        MRequestVoteResponse{} -> ignore
+        MRequestVoteResponse{} -> do
+            logS "Received RequestVoteResponse message in Follower state, ignoring"
+            ignore
         MHeartbeat m -> handleHeartbeat m
     ETimeout t -> handleTimeout t
   where
-    ignore = wrapFst (state, [])
-
-    requestVoteResponse s g = RequestVoteResponse { rvrTerm = fCurrentTerm s
-                                                  , rvrVoteGranted = g
-                                                  }
-
-    bumpTerm s t = s { fCurrentTerm = t
-                     , fVotedFor = Nothing
-                     }
+    ignore = return $ wrap state0
 
     handleRequestVote sender msg@RequestVote{..}
-      | rvTerm < fCurrentTerm fs =
-          wrapFst (state, [CSend sender $ MRequestVoteResponse $ requestVoteResponse fs False])
-      | rvTerm > fCurrentTerm fs = handleRequestVote2 sender msg $ bumpTerm fs rvTerm
-      | otherwise = handleRequestVote2 sender msg fs
+      | rvTerm < fCurrentTerm fs0 = do
+          logS "Received RequestVote for old term"
+          send sender $ MRequestVoteResponse
+                      $ RequestVoteResponse { rvrTerm = fCurrentTerm fs0
+                                            , rvrVoteGranted = False
+                                            }
+          ignore
+      | rvTerm > fCurrentTerm fs0 = do
+          logS "Received RequestVote for newer term, bumping"
+          let fs = fs0 { fCurrentTerm = rvTerm
+                       , fVotedFor = Nothing
+                       }
+          handleRequestVote2 sender msg fs
+      | otherwise = do
+          logS "Recieved RequestVote for current term"
+          handleRequestVote2 sender msg fs0
 
-    handleRequestVote2 sender RequestVote{..} fs'@FollowerState{..}
+    handleRequestVote2 sender RequestVote{..} fs@FollowerState{..}
       | (fVotedFor == Nothing || fVotedFor == Just rvCandidateId)
-          && (rvLastLogIndex >= logLastIndex fLog && rvLastLogTerm >= logLastTerm fLog) =
-          wrapFst $ (Follower fs'{ fVotedFor = Just sender },
-                     [ CSend sender $ MRequestVoteResponse $ requestVoteResponse fs' True
-                     , CResetTimeout $ CTElection
-                         (configElectionTimeout, 2 * configElectionTimeout)
-                     ])
-      | otherwise = wrapFst $
-          (Follower fs',
-           [CSend sender $ MRequestVoteResponse $ requestVoteResponse fs' False])
+          && (rvLastLogIndex >= logLastIndex fLog && rvLastLogTerm >= logLastTerm fLog) = do
+          log [ B.byteString "Granting vote for term "
+              , logTerm rvTerm
+              , B.byteString " to "
+              , B.byteString sender
+              ]
+
+          send sender $ MRequestVoteResponse
+                      $ RequestVoteResponse { rvrTerm = fCurrentTerm
+                                            , rvrVoteGranted = True
+                                            }
+
+          resetElectionTimeout
+
+          return $ wrap $ Follower fs{ fVotedFor = Just sender }
+      | otherwise = do
+          log [ B.byteString "Rejecting vote for term "
+              , logTerm rvTerm
+              , B.byteString " to "
+              , B.byteString sender
+              ]
+          send sender $ MRequestVoteResponse
+                      $ RequestVoteResponse { rvrTerm = fCurrentTerm
+                                            , rvrVoteGranted = False
+                                            }
+          return $ wrap $ Follower fs
 
     handleHeartbeat (Heartbeat term)
-      | term == fCurrentTerm fs = wrapFst $
-          (state, [CResetTimeout $ CTElection (configElectionTimeout, 2 * configElectionTimeout)])
-      | otherwise = ignore
+      | term == fCurrentTerm fs0 = do
+          logS "Received heartbeat"
+          resetElectionTimeout
+          ignore
+      | otherwise = do
+          logS "Ignoring heartbeat"
+          ignore
 
     handleTimeout t = case t of
-        ETElection -> wrapFst $ becomeCandidate fs
-        ETHeartbeat -> ignore
+        ETElection -> becomeCandidate fs0
+        ETHeartbeat -> logS "Ignoring heartbeat timeout" >> ignore
 
     -- TODO Handle single-node case
-    becomeCandidate FollowerState{..} = (Candidate state', commands)
-      where
-        state' = CandidateState { cCurrentTerm = succTerm fCurrentTerm
-                                , cVotes = Set.singleton configNodeId
-                                , cLog = fLog
-                                }
-        commands = [ CResetTimeout $ CTElection
-                       (configElectionTimeout, 2 * configElectionTimeout)
-                   , CBroadcast $ MRequestVote
-                                $ RequestVote { rvTerm = cCurrentTerm state'
-                                              , rvCandidateId = configNodeId
-                                              , rvLastLogIndex = logLastIndex $ cLog state'
-                                              , rvLastLogTerm = logLastTerm $ cLog state'
-                                              }
-                   ]
+    becomeCandidate FollowerState{..} = do
+        let nextTerm = succTerm fCurrentTerm
 
--- | Utility to determine whether a set of votes forms a majority.
-isMajority :: Config -> Set NodeId -> Bool
-isMajority Config{..} votes = Set.size votes >= Set.size configNodes `div` 2 + 1
+        log [ B.byteString "Becoming candidate for term "
+            , logTerm nextTerm
+            ]
+
+        resetElectionTimeout
+
+        nodeId <- getNodeId
+
+        let state = CandidateState { cCurrentTerm = nextTerm
+                                   , cVotes = Set.singleton nodeId
+                                   , cLog = fLog
+                                   }
+
+        broadcast $ MRequestVote
+                  $ RequestVote { rvTerm = cCurrentTerm state
+                                , rvCandidateId = nodeId
+                                , rvLastLogIndex = logLastIndex $ cLog state
+                                , rvLastLogTerm = logLastTerm $ cLog state
+                                }
+
+        return $ wrap $ Candidate state
+
 
 -- | Handler for events when in `Candidate' state.
 handleCandidate :: Handler Candidate a
-handleCandidate cfg@Config{..} evt state@(Candidate cs) = case evt of
+handleCandidate evt state0@(Candidate cs0) = case evt of
     EMessage sender msg -> case msg of
         MRequestVote m -> handleRequestVote sender m
         MRequestVoteResponse m -> handleRequestVoteResponse sender m
         MHeartbeat m -> handleHeartbeat sender m
     ETimeout t -> handleTimeout t
   where
-    ignore = wrapFst (state, [])
+    ignore = return $ wrap state0
 
     handleRequestVote sender RequestVote{..}
-      | rvTerm > cCurrentTerm cs = wrapFst (stepDown sender rvTerm)
-      | otherwise = wrapFst (state, [CSend sender $ MRequestVoteResponse
-                                                  $ RequestVoteResponse { rvrTerm = cCurrentTerm cs
-                                                                        , rvrVoteGranted = False
-                                                                        }])
+      | rvTerm > cCurrentTerm cs0 = stepDown sender rvTerm
+      | otherwise = do
+            log [ B.byteString "Denying term "
+                , logTerm rvTerm
+                , B.byteString " to "
+                , B.byteString sender
+                ]
+            send sender $ MRequestVoteResponse
+                        $ RequestVoteResponse { rvrTerm = cCurrentTerm cs0
+                                              , rvrVoteGranted = False
+                                              }
+            ignore
 
     handleRequestVoteResponse sender RequestVoteResponse{..}
-      | rvrTerm < cCurrentTerm cs = ignore
-      | rvrTerm > cCurrentTerm cs = wrapFst (stepDown sender rvrTerm)
-      | not rvrVoteGranted = ignore
-      | otherwise =
-          let votes' = Set.insert sender $ cVotes cs in
-          if isMajority cfg votes'
-              then wrapFst becomeLeader
-              else wrapFst $ (Candidate cs{ cVotes = votes' }, [])
+      | rvrTerm < cCurrentTerm cs0 = do
+            logS "Ignoring RequestVoteResponse for old term"
+            ignore
+      | rvrTerm > cCurrentTerm cs0 = stepDown sender rvrTerm
+      | not rvrVoteGranted = do
+            logS "Ignoring RequestVoteResponse since vote wasn't granted"
+            ignore
+      | otherwise = do
+            logS "Received valid RequestVoteResponse"
+
+            let votes' = Set.insert sender $ cVotes cs0
+
+            m <- isMajority votes'
+
+            if m
+                then becomeLeader
+                else return $ wrap $ Candidate cs0 { cVotes = votes' }
 
     handleHeartbeat sender (Heartbeat term)
-      | term > cCurrentTerm cs = wrapFst $ stepDown sender term
-      | otherwise = ignore
+      | term > cCurrentTerm cs0 = stepDown sender term
+      | otherwise = do
+            logS "Ignoring heartbeat"
+            ignore
 
     handleTimeout t = case t of
-        ETElection ->
-            let state' = CandidateState { cCurrentTerm = succTerm $ cCurrentTerm cs
-                                        , cVotes = Set.singleton configNodeId
-                                        , cLog = cLog cs
-                                        } in
-            let commands = [ CResetTimeout $ CTElection
-                               (configElectionTimeout, 2 * configElectionTimeout)
-                           , CBroadcast $ MRequestVote
-                                        $ RequestVote { rvTerm = cCurrentTerm state'
-                                                      , rvCandidateId = configNodeId
-                                                      , rvLastLogIndex = logLastIndex $ cLog state'
-                                                      , rvLastLogTerm = logLastTerm $ cLog state'
-                                                      }
-                           ] in
-            wrapFst (Candidate state', commands)
-        ETHeartbeat -> ignore
+        ETElection -> do
+            nodeId <- getNodeId
 
-    stepDown sender term = (Follower fs, commands)
-      where
-        fs = FollowerState { fCurrentTerm = term
-                           , fVotedFor = Just sender
-                           , fLog = cLog cs
-                           }
-        commands = [ CSend sender $ MRequestVoteResponse $ RequestVoteResponse { rvrTerm = term
-                                                                               , rvrVoteGranted = True
-                                                                               }
-                   , CResetTimeout $ CTElection
-                       (configElectionTimeout, 2 * configElectionTimeout)
-                   ]
+            logS "Election timeout occurred"
 
-    becomeLeader = (Leader ls, commands)
-      where
-        ls = LeaderState { lCurrentTerm = cCurrentTerm cs
-                         , lLog = cLog cs
-                         }
-        commands = [ CResetTimeout $ CTHeartbeat configHeartbeatTimeout
-                   , CBroadcast $ MHeartbeat $ Heartbeat $ lCurrentTerm ls
-                   ]
+            let state = CandidateState { cCurrentTerm = succTerm $ cCurrentTerm cs0
+                                       , cVotes = Set.singleton nodeId
+                                       , cLog = cLog cs0
+                                       }
+
+            resetElectionTimeout
+            broadcast $ MRequestVote
+                      $ RequestVote { rvTerm = cCurrentTerm state
+                                    , rvCandidateId = nodeId
+                                    , rvLastLogIndex = logLastIndex $ cLog state
+                                    , rvLastLogTerm = logLastTerm $ cLog state
+                                    }
+
+            return $ wrap $ Candidate state
+        ETHeartbeat -> do
+            logS "Ignoring heartbeat timer timeout"
+            ignore
+
+    stepDown sender term = do
+        log [ B.byteString "Stepping down, received term "
+            , logTerm term
+            , B.byteString " from "
+            , B.byteString sender
+            ]
+
+        send sender $ MRequestVoteResponse
+                    $ RequestVoteResponse { rvrTerm = term
+                                          , rvrVoteGranted = True
+                                          }
+        resetElectionTimeout
+
+        return $ wrap $ Follower
+                      $ FollowerState { fCurrentTerm = term
+                                      , fVotedFor = Just sender
+                                      , fLog = cLog cs0
+                                      }
+
+    becomeLeader = do
+        log [ B.byteString "Becoming leader for term"
+            , logTerm $ cCurrentTerm cs0
+            ]
+
+        resetHeartbeatTimeout
+        broadcast $ MHeartbeat
+                  $ Heartbeat $ cCurrentTerm cs0
+
+        return $ wrap $ Leader
+                      $ LeaderState { lCurrentTerm = cCurrentTerm cs0
+                                    , lLog = cLog cs0
+                                    }
 
 -- | Handler for events when in `Leader' state.
 handleLeader :: Handler Leader a
-handleLeader Config{..} evt state@(Leader LeaderState{..}) = case evt of
+handleLeader evt state0@(Leader LeaderState{..}) = case evt of
     EMessage sender msg -> case msg of
         MRequestVote m -> handleRequestVote sender m
-        MRequestVoteResponse{} -> ignore
+        MRequestVoteResponse{} -> do
+            -- TODO Stepdown if rvrTerm > current?
+            logS "Ignoring RequestVoteResponse in leader state"
+            ignore
         MHeartbeat m -> handleHeartbeat sender m
     ETimeout t -> handleTimeout t
   where
-    ignore = wrapFst (state, [])
+    ignore = return $ wrap state0
 
     handleRequestVote sender RequestVote{..}
-      | rvTerm > lCurrentTerm = wrapFst (stepDown sender rvTerm)
-      | otherwise = ignore
+      | rvTerm > lCurrentTerm = stepDown sender rvTerm
+      | otherwise = logS "Ignore RequestVote for old term" >> ignore
 
     handleHeartbeat sender (Heartbeat term)
-      | term > lCurrentTerm = wrapFst (stepDown sender term)
-      | otherwise = ignore
+      | term > lCurrentTerm = stepDown sender term
+      | otherwise = logS "Ignore heartbeat of old term" >> ignore
 
     handleTimeout t = case t of
-        ETElection -> ignore
-        ETHeartbeat -> wrapFst (state, commands)
-      where
-        commands = [ CResetTimeout $ CTHeartbeat configHeartbeatTimeout
-                   , CBroadcast $ MHeartbeat $ Heartbeat lCurrentTerm
-                   ]
+        -- TODO Can this be ignored? Stepdown instead?
+        ETElection -> logS "Ignore election timeout" >> ignore
+        ETHeartbeat -> do
+            logS "Sending heartbeats"
 
-    stepDown sender term = (Follower fs, commands)
-      where
-        fs = FollowerState { fCurrentTerm = term
-                           , fVotedFor = Just sender
-                           , fLog = lLog
-                           }
-        commands = [ CSend sender $ MRequestVoteResponse $ RequestVoteResponse { rvrTerm = term
-                                                                               , rvrVoteGranted = True
-                                                                               }
-                   , CResetTimeout $ CTElection
-                       (configElectionTimeout, 2 * configElectionTimeout)
-                   ]
+            resetHeartbeatTimeout
+            broadcast $ MHeartbeat
+                      $ Heartbeat lCurrentTerm
+
+            ignore
+
+    stepDown sender term = do
+        log [ B.byteString "Stepping down, received term "
+            , logTerm term
+            , B.byteString " from "
+            , B.byteString sender
+            ]
+
+        send sender $ MRequestVoteResponse
+                    $ RequestVoteResponse { rvrTerm = term
+                                          , rvrVoteGranted = True
+                                          }
+        resetElectionTimeout
+
+        return $ wrap $ Follower
+                      $ FollowerState { fCurrentTerm = term
+                                      , fVotedFor = Just sender
+                                      , fLog = lLog
+                                      }
+
 
 -- | The initial state and commands for a new node to start.
 initialize :: Config -> (SomeState a, [Command])
-initialize Config{..} = wrapFst (Follower state, commands)
+initialize Config{..} = (wrap $ Follower state, commands)
   where
     state = FollowerState { fCurrentTerm = Term 0
                           , fVotedFor = Nothing
                           , fLog = emptyLog
                           }
     commands = [CResetTimeout $ CTElection (configElectionTimeout, 2 * configElectionTimeout)]
+
 
 -- | Get a `String' representation of the current state `Mode'.
 stateName :: SomeState a -> String
