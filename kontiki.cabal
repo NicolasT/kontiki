@@ -20,7 +20,7 @@ Library
   -- Other-Modules:       
   Build-Depends:       base >= 4 && < 5
                      , mtl
-                     , bytestring
+                     , bytestring >= 0.10.2
                      , containers
   Hs-Source-Dirs:      src
   Ghc-Options:         -Wall -fwarn-incomplete-patterns
