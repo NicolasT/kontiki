@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs,
              StandaloneDeriving,
              KindSignatures,
-             DataKinds #-}
+             DataKinds,
+             TemplateHaskell #-}
 module Network.Kontiki.Types where
 
 import Data.Word
@@ -11,6 +12,8 @@ import Data.Set (Set)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 ()
 import Data.ByteString.Builder (Builder)
+
+import Control.Lens hiding (Index)
 
 -- | Representation of a `Term'.
 newtype Term = Term Word64
@@ -125,13 +128,14 @@ wrap = WrapState
 
 
 -- | Configuration
-data Config = Config { configNodeId :: NodeId
-                     , configNodes :: Set NodeId
-                     , configElectionTimeout :: Int
-                     , configHeartbeatTimeout :: Int
+data Config = Config { _configNodeId :: NodeId
+                     , _configNodes :: Set NodeId
+                     , _configElectionTimeout :: Int
+                     , _configHeartbeatTimeout :: Int
                      }
   deriving (Show, Eq)
 
+makeLenses ''Config
 
 -- | Representation of possible `ETimeout' event messages.
 data ETimeout = ETElection

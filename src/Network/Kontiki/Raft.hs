@@ -33,14 +33,16 @@ import qualified Data.Set as Set
 
 import qualified Data.ByteString.Builder as B
 
+import Control.Lens
+
 import Network.Kontiki.Monad
 import Network.Kontiki.Types
 
 -- | Utility to determine whether a set of votes forms a majority.
 isMajority :: Set NodeId -> Transition s Bool
 isMajority votes = do
-    cfg <- getConfig
-    return $ Set.size votes >= Set.size (configNodes cfg) `div` 2 + 1
+    nodes <- view configNodes
+    return $ Set.size votes >= Set.size nodes `div` 2 + 1
 
 -- | Top-level handler for `SomeState' input states.
 handle :: Config -> Event -> SomeState a -> (SomeState a, [Command])
@@ -52,7 +54,7 @@ handle cfg evt state = case state of
     WrapState state'@Leader{} ->
         select $ runTransition handleLeader cfg state' evt
   where
-    select (a, b, c) = (a, c)
+    select (a, _, c) = (a, c)
 
 handleFollower :: Handler Follower a
 handleFollower evt state0@(Follower fs0) = case evt of
@@ -136,7 +138,7 @@ handleFollower evt state0@(Follower fs0) = case evt of
 
         resetElectionTimeout
 
-        nodeId <- getNodeId
+        nodeId <- view configNodeId
 
         let state = CandidateState { cCurrentTerm = nextTerm
                                    , cVotes = Set.singleton nodeId
@@ -205,7 +207,7 @@ handleCandidate evt state0@(Candidate cs0) = case evt of
 
     handleTimeout t = case t of
         ETElection -> do
-            nodeId <- getNodeId
+            nodeId <- view configNodeId
 
             logS "Election timeout occurred"
 
@@ -316,13 +318,13 @@ handleLeader evt state0@(Leader LeaderState{..}) = case evt of
 
 -- | The initial state and commands for a new node to start.
 initialize :: Config -> (SomeState a, [Command])
-initialize Config{..} = (wrap $ Follower state, commands)
+initialize cfg = (wrap $ Follower state, commands)
   where
     state = FollowerState { fCurrentTerm = Term 0
                           , fVotedFor = Nothing
                           , fLog = emptyLog
                           }
-    commands = [CResetTimeout $ CTElection (configElectionTimeout, 2 * configElectionTimeout)]
+    commands = [CResetTimeout $ CTElection (cfg ^. configElectionTimeout, 2 * cfg ^. configElectionTimeout)]
 
 
 -- | Get a `String' representation of the current state `Mode'.

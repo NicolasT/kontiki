@@ -23,6 +23,7 @@ Library
                      , mtl
                      , bytestring >= 0.10.2
                      , containers
+                     , lens
   Hs-Source-Dirs:      src
   Ghc-Options:         -Wall -fwarn-incomplete-patterns
 

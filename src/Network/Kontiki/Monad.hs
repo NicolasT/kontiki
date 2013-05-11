@@ -12,6 +12,8 @@ import qualified Data.ByteString.Builder as B
 import Control.Monad.RWS
 import Control.Monad.Identity (Identity, runIdentity)
 
+import Control.Lens
+
 import Network.Kontiki.Types
 
 newtype TransitionT s m r = T { unTransitionT :: RWST Config [Command] s m r }
@@ -31,26 +33,20 @@ type Handler f a = Event -> f a -> Transition (f a) (SomeState a)
 runTransition :: Handler f a -> Config -> f a -> Event -> (SomeState a, f a, [Command])
 runTransition h c s e = runIdentity $ runRWST (unTransitionT $ h e s) c s
 
-getConfig :: Transition s Config
-getConfig = ask
-
-getNodeId :: Transition s NodeId
-getNodeId = configNodeId `fmap` getConfig
-
 exec :: Command -> Transition s ()
 exec c = tell [c]
 
 resetElectionTimeout :: Transition s ()
 resetElectionTimeout = do
-    cfg <- getConfig
+    t <- view configElectionTimeout
     exec $ CResetTimeout
-         $ CTElection (configElectionTimeout cfg, 2 * configElectionTimeout cfg)
+         $ CTElection (t, 2 * t)
 
 resetHeartbeatTimeout :: Transition s ()
 resetHeartbeatTimeout = do
-    cfg <- getConfig
+    t <- view configHeartbeatTimeout
     exec $ CResetTimeout
-         $ CTHeartbeat $ configHeartbeatTimeout cfg
+         $ CTHeartbeat t
 
 broadcast :: Message -> Transition s ()
 broadcast = exec . CBroadcast

@@ -132,10 +132,10 @@ main = do
 
     forM_ nodes' $ \(name, node) -> do
         let others = filter (\(n, _) -> n /= name) nodes'
-            config = Config { configNodeId = name
-                            , configNodes = Set.fromList nodes
-                            , configElectionTimeout = 3000 * 1000
-                            , configHeartbeatTimeout =  1000 * 1000
+            config = Config { _configNodeId = name
+                            , _configNodes = Set.fromList nodes
+                            , _configElectionTimeout = 3000 * 1000
+                            , _configHeartbeatTimeout =  1000 * 1000
                             }
         forkIO $ runNode config others node
 
