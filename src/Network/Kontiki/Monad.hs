@@ -10,7 +10,6 @@ import Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as B
 
 import Control.Monad.RWS
-import Control.Monad.Identity (Identity, runIdentity)
 
 import Control.Lens
 
@@ -26,38 +25,36 @@ newtype TransitionT s m r = T { unTransitionT :: RWST Config [Command] s m r }
            , MonadRWS Config [Command] s
            )
 
-type Transition s r = TransitionT s Identity r
+type Handler f a m = Event -> f a -> TransitionT (f a) m (SomeState a)
 
-type Handler f a = Event -> f a -> Transition (f a) (SomeState a)
+runTransitionT :: Handler f a m -> Config -> f a -> Event -> m (SomeState a, f a, [Command])
+runTransitionT h c s e = runRWST (unTransitionT $ h e s) c s
 
-runTransition :: Handler f a -> Config -> f a -> Event -> (SomeState a, f a, [Command])
-runTransition h c s e = runIdentity $ runRWST (unTransitionT $ h e s) c s
-
-exec :: Command -> Transition s ()
+exec :: Monad m => Command -> TransitionT s m ()
 exec c = tell [c]
 
-resetElectionTimeout :: Transition s ()
+resetElectionTimeout :: Monad m => TransitionT s m ()
 resetElectionTimeout = do
     t <- view configElectionTimeout
     exec $ CResetTimeout
          $ CTElection (t, 2 * t)
 
-resetHeartbeatTimeout :: Transition s ()
+resetHeartbeatTimeout :: Monad m => TransitionT s m ()
 resetHeartbeatTimeout = do
     t <- view configHeartbeatTimeout
     exec $ CResetTimeout
          $ CTHeartbeat t
 
-broadcast :: Message -> Transition s ()
+broadcast :: Monad m => Message -> TransitionT s m ()
 broadcast = exec . CBroadcast
 
-send :: NodeId -> Message -> Transition s ()
+send :: Monad m => NodeId -> Message -> TransitionT s m ()
 send n m = exec $ CSend n m
 
-logS :: ByteString -> Transition s ()
+logS :: Monad m => ByteString -> TransitionT s m ()
 logS = exec . CLog . B.byteString
 
-log :: [Builder] -> Transition s ()
+log :: Monad m => [Builder] -> TransitionT s m ()
 log = exec . CLog . mconcat
 
 logTerm :: Term -> Builder

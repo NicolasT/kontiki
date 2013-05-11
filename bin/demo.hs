@@ -15,6 +15,8 @@ import qualified Data.ByteString.Lazy.Char8 as LBS8
 import Control.Concurrent
 import Control.Concurrent.STM
 
+import Control.Monad.Identity (runIdentity)
+
 import System.Random
 
 import System.Log.Logger
@@ -43,7 +45,7 @@ runNode config others node0 = do
         debugM name $ name ++ " @ " ++ show state
         debugM name $ name ++ ": " ++ show evt
 
-        let (state', commands) = R.handle config evt state
+        let (state', commands) = runIdentity $ R.handle config evt state
             oldN = R.stateName state
             newN = R.stateName state'
 

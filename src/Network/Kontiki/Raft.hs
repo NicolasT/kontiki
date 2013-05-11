@@ -39,24 +39,24 @@ import Network.Kontiki.Monad
 import Network.Kontiki.Types
 
 -- | Utility to determine whether a set of votes forms a majority.
-isMajority :: Set NodeId -> Transition s Bool
+isMajority :: Monad m => Set NodeId -> TransitionT s m Bool
 isMajority votes = do
     nodes <- view configNodes
     return $ Set.size votes >= Set.size nodes `div` 2 + 1
 
 -- | Top-level handler for `SomeState' input states.
-handle :: Config -> Event -> SomeState a -> (SomeState a, [Command])
+handle :: (Functor m, Monad m) => Config -> Event -> SomeState a -> m (SomeState a, [Command])
 handle cfg evt state = case state of
     WrapState state'@Follower{} ->
-        select $ runTransition handleFollower cfg state' evt
+        select `fmap` runTransitionT handleFollower cfg state' evt
     WrapState state'@Candidate{} ->
-        select $ runTransition handleCandidate cfg state' evt
+        select `fmap` runTransitionT handleCandidate cfg state' evt
     WrapState state'@Leader{} ->
-        select $ runTransition handleLeader cfg state' evt
+        select `fmap` runTransitionT handleLeader cfg state' evt
   where
     select (a, _, c) = (a, c)
 
-handleFollower :: Handler Follower a
+handleFollower :: Monad m => Handler Follower a m
 handleFollower evt state0@(Follower fs0) = case evt of
     EMessage sender msg -> case msg of
         MRequestVote m -> handleRequestVote sender m
@@ -156,7 +156,7 @@ handleFollower evt state0@(Follower fs0) = case evt of
 
 
 -- | Handler for events when in `Candidate' state.
-handleCandidate :: Handler Candidate a
+handleCandidate :: Monad m => Handler Candidate a m
 handleCandidate evt state0@(Candidate cs0) = case evt of
     EMessage sender msg -> case msg of
         MRequestVote m -> handleRequestVote sender m
@@ -263,7 +263,7 @@ handleCandidate evt state0@(Candidate cs0) = case evt of
                                     }
 
 -- | Handler for events when in `Leader' state.
-handleLeader :: Handler Leader a
+handleLeader :: Monad m => Handler Leader a m
 handleLeader evt state0@(Leader LeaderState{..}) = case evt of
     EMessage sender msg -> case msg of
         MRequestVote m -> handleRequestVote sender m

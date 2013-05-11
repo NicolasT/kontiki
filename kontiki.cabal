@@ -30,6 +30,7 @@ Library
 Executable kontiki-demo
   Main-Is:             demo.hs
   Build-Depends:       base >= 4 && < 5
+                     , mtl
                      , stm
                      , random
                      , bytestring
