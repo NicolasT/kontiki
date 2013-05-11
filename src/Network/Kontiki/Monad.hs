@@ -1,62 +1,67 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Network.Kontiki.Monad where
 
+import Control.Applicative (Applicative)
+
 import Data.Monoid
 
 import Data.ByteString (ByteString)
 import Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as B
 
-import Control.Monad.Reader (MonadReader, ReaderT)
-import qualified Control.Monad.Reader as R
-import Control.Monad.Writer (MonadWriter, Writer)
-import qualified Control.Monad.Writer as W
+import Control.Monad.RWS
+import Control.Monad.Identity (Identity, runIdentity)
 
 import Network.Kontiki.Types
 
-newtype Transition r = T { unTransition :: ReaderT Config (Writer [Command]) r }
+newtype TransitionT s m r = T { unTransitionT :: RWST Config [Command] s m r }
   deriving ( Functor
+           , Applicative
            , Monad
            , MonadReader Config
            , MonadWriter [Command]
+           , MonadState s
+           , MonadRWS Config [Command] s
            )
 
-type Handler f a = Event -> f a -> Transition (SomeState a)
+type Transition s r = TransitionT s Identity r
 
-runTransition :: Handler f a -> Config -> f a -> Event -> (SomeState a, [Command])
-runTransition h c s e = W.runWriter $ flip R.runReaderT c $ unTransition $ h e s
+type Handler f a = Event -> f a -> Transition (f a) (SomeState a)
 
-getConfig :: Transition Config
-getConfig = R.ask
+runTransition :: Handler f a -> Config -> f a -> Event -> (SomeState a, f a, [Command])
+runTransition h c s e = runIdentity $ runRWST (unTransitionT $ h e s) c s
 
-getNodeId :: Transition NodeId
+getConfig :: Transition s Config
+getConfig = ask
+
+getNodeId :: Transition s NodeId
 getNodeId = configNodeId `fmap` getConfig
 
-exec :: Command -> Transition ()
-exec c = W.tell [c]
+exec :: Command -> Transition s ()
+exec c = tell [c]
 
-resetElectionTimeout :: Transition ()
+resetElectionTimeout :: Transition s ()
 resetElectionTimeout = do
     cfg <- getConfig
     exec $ CResetTimeout
          $ CTElection (configElectionTimeout cfg, 2 * configElectionTimeout cfg)
 
-resetHeartbeatTimeout :: Transition ()
+resetHeartbeatTimeout :: Transition s ()
 resetHeartbeatTimeout = do
     cfg <- getConfig
     exec $ CResetTimeout
          $ CTHeartbeat $ configHeartbeatTimeout cfg
 
-broadcast :: Message -> Transition ()
+broadcast :: Message -> Transition s ()
 broadcast = exec . CBroadcast
 
-send :: NodeId -> Message -> Transition ()
+send :: NodeId -> Message -> Transition s ()
 send n m = exec $ CSend n m
 
-logS :: ByteString -> Transition ()
+logS :: ByteString -> Transition s ()
 logS = exec . CLog . B.byteString
 
-log :: [Builder] -> Transition ()
+log :: [Builder] -> Transition s ()
 log = exec . CLog . mconcat
 
 logTerm :: Term -> Builder

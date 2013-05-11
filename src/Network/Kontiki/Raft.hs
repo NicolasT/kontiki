@@ -37,7 +37,7 @@ import Network.Kontiki.Monad
 import Network.Kontiki.Types
 
 -- | Utility to determine whether a set of votes forms a majority.
-isMajority :: Set NodeId -> Transition Bool
+isMajority :: Set NodeId -> Transition s Bool
 isMajority votes = do
     cfg <- getConfig
     return $ Set.size votes >= Set.size (configNodes cfg) `div` 2 + 1
@@ -46,11 +46,13 @@ isMajority votes = do
 handle :: Config -> Event -> SomeState a -> (SomeState a, [Command])
 handle cfg evt state = case state of
     WrapState state'@Follower{} ->
-        runTransition handleFollower cfg state' evt
+        select $ runTransition handleFollower cfg state' evt
     WrapState state'@Candidate{} ->
-        runTransition handleCandidate cfg state' evt
+        select $ runTransition handleCandidate cfg state' evt
     WrapState state'@Leader{} ->
-        runTransition handleLeader cfg state' evt
+        select $ runTransition handleLeader cfg state' evt
+  where
+    select (a, b, c) = (a, c)
 
 handleFollower :: Handler Follower a
 handleFollower evt state0@(Follower fs0) = case evt of
