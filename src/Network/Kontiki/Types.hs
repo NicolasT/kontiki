@@ -63,11 +63,13 @@ logLastTerm (Log es) | null es = Term 0
 
 
 -- | State maintained by a node in `Follower' mode.
-data FollowerState a = FollowerState { fCurrentTerm :: Term
-                                     , fVotedFor :: Maybe CandidateId
-                                     , fLog :: Log a
+data FollowerState a = FollowerState { _fCurrentTerm :: Term
+                                     , _fVotedFor :: Maybe CandidateId
+                                     , _fLog :: Log a
                                      }
   deriving (Show, Eq)
+
+makeLenses ''FollowerState
 
 -- | State maintained by a node in `Candidate' mode.
 data CandidateState a = CandidateState { _cCurrentTerm :: Term

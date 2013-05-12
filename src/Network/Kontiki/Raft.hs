@@ -59,81 +59,93 @@ handle cfg evt state = case state of
   where
     select (a, _, c) = (a, c)
 
-handleFollower :: Monad m => Handler Follower a m
-handleFollower evt state0@(Follower fs0) = case evt of
-    EMessage sender msg -> case msg of
-        MRequestVote m -> handleRequestVote sender m
-        MRequestVoteResponse{} -> do
-            logS "Received RequestVoteResponse message in Follower state, ignoring"
-            ignore
-        MHeartbeat m -> handleHeartbeat m
-    ETimeout t -> handleTimeout t
+handleFollower :: (Functor m, Monad m) => Handler Follower a m
+handleFollower evt _ =
+    zoom followerLens $ case evt of
+        EMessage sender msg -> case msg of
+            MRequestVote m -> handleRequestVote sender m
+            MRequestVoteResponse{} -> do
+                logS "Received RequestVoteResponse message in Follower state, ignoring"
+                ignore
+            MHeartbeat m -> handleHeartbeat m
+        ETimeout t -> handleTimeout t
   where
-    ignore = return $ wrap state0
+    followerLens = lens (\(Follower s) -> s) (\_ s -> Follower s)
+    ignore = (wrap . Follower) `fmap` get
 
-    handleRequestVote sender msg@RequestVote{..}
-      | rvTerm < fCurrentTerm fs0 = do
-          logS "Received RequestVote for old term"
-          send sender $ MRequestVoteResponse
-                      $ RequestVoteResponse { rvrTerm = fCurrentTerm fs0
-                                            , rvrVoteGranted = False
-                                            }
-          ignore
-      | rvTerm > fCurrentTerm fs0 = do
-          logS "Received RequestVote for newer term, bumping"
-          let fs = fs0 { fCurrentTerm = rvTerm
-                       , fVotedFor = Nothing
-                       }
-          handleRequestVote2 sender msg fs
-      | otherwise = do
-          logS "Recieved RequestVote for current term"
-          handleRequestVote2 sender msg fs0
+    handleRequestVote sender msg@RequestVote{..} = do
+        currentTerm <- use fCurrentTerm
 
-    handleRequestVote2 sender RequestVote{..} fs@FollowerState{..}
-      | (fVotedFor == Nothing || fVotedFor == Just rvCandidateId)
-          && (rvLastLogIndex >= logLastIndex fLog && rvLastLogTerm >= logLastTerm fLog) = do
-          log [ B.byteString "Granting vote for term "
-              , logTerm rvTerm
-              , B.byteString " to "
-              , B.byteString sender
-              ]
+        if | rvTerm < currentTerm -> do
+               logS "Received RequestVote for old term"
+               send sender $ MRequestVoteResponse
+                           $ RequestVoteResponse { rvrTerm = currentTerm
+                                                 , rvrVoteGranted = False
+                                                 }
+               ignore
+           | rvTerm > currentTerm -> do
+               logS "Received RequestVote for newer term, bumping"
 
-          send sender $ MRequestVoteResponse
-                      $ RequestVoteResponse { rvrTerm = fCurrentTerm
-                                            , rvrVoteGranted = True
-                                            }
+               fCurrentTerm .= rvTerm
+               fVotedFor .= Nothing
 
-          resetElectionTimeout
+               handleRequestVote2 sender msg
+           | otherwise -> do
+               logS "Recieved RequestVote for current term"
+               handleRequestVote2 sender msg
 
-          return $ wrap $ Follower fs{ fVotedFor = Just sender }
-      | otherwise = do
-          log [ B.byteString "Rejecting vote for term "
-              , logTerm rvTerm
-              , B.byteString " to "
-              , B.byteString sender
-              ]
-          send sender $ MRequestVoteResponse
-                      $ RequestVoteResponse { rvrTerm = fCurrentTerm
-                                            , rvrVoteGranted = False
-                                            }
-          return $ wrap $ Follower fs
+    handleRequestVote2 sender RequestVote{..} = do
+        votedFor <- use fVotedFor
+        currentTerm <- use fCurrentTerm
+        l <- use fLog
 
-    handleHeartbeat (Heartbeat term)
-      | term == fCurrentTerm fs0 = do
-          logS "Received heartbeat"
-          resetElectionTimeout
-          ignore
-      | otherwise = do
-          logS "Ignoring heartbeat"
-          ignore
+        if | (votedFor == Nothing || votedFor == Just rvCandidateId)
+               && (rvLastLogIndex >= logLastIndex l && rvLastLogTerm >= logLastTerm l) -> do
+               log [ B.byteString "Granting vote for term "
+                   , logTerm rvTerm
+                   , B.byteString " to "
+                   , B.byteString sender
+                   ]
+
+               send sender $ MRequestVoteResponse
+                           $ RequestVoteResponse { rvrTerm = currentTerm
+                                                 , rvrVoteGranted = True
+                                                 }
+
+               resetElectionTimeout
+
+               get >>= \s -> return $ wrap $ Follower s{ _fVotedFor = Just sender }
+            | otherwise -> do
+               log [ B.byteString "Rejecting vote for term "
+                   , logTerm rvTerm
+                   , B.byteString " to "
+                   , B.byteString sender
+                   ]
+               send sender $ MRequestVoteResponse
+                           $ RequestVoteResponse { rvrTerm = currentTerm
+                                                 , rvrVoteGranted = False
+                                                 }
+               ignore
+
+    handleHeartbeat (Heartbeat term) = do
+        currentTerm <- use fCurrentTerm
+
+        if | term == currentTerm -> do
+               logS "Received heartbeat"
+               resetElectionTimeout
+               ignore
+           | otherwise -> do
+               logS "Ignoring heartbeat"
+               ignore
 
     handleTimeout t = case t of
-        ETElection -> becomeCandidate fs0
+        ETElection -> becomeCandidate
         ETHeartbeat -> logS "Ignoring heartbeat timeout" >> ignore
 
     -- TODO Handle single-node case
-    becomeCandidate FollowerState{..} = do
-        let nextTerm = succTerm fCurrentTerm
+    becomeCandidate = do
+        currentTerm <- use fCurrentTerm
+        let nextTerm = succTerm currentTerm
 
         log [ B.byteString "Becoming candidate for term "
             , logTerm nextTerm
@@ -142,10 +154,11 @@ handleFollower evt state0@(Follower fs0) = case evt of
         resetElectionTimeout
 
         nodeId <- view configNodeId
+        l <- use fLog
 
         let state = CandidateState { _cCurrentTerm = nextTerm
                                    , _cVotes = Set.singleton nodeId
-                                   , _cLog = fLog
+                                   , _cLog = l
                                    }
 
         let l = state ^. cLog
@@ -260,9 +273,9 @@ handleCandidate evt _ =
         l <- use cLog
 
         return $ wrap $ Follower
-                      $ FollowerState { fCurrentTerm = term
-                                      , fVotedFor = Just sender
-                                      , fLog = l
+                      $ FollowerState { _fCurrentTerm = term
+                                      , _fVotedFor = Just sender
+                                      , _fLog = l
                                       }
 
     becomeLeader = do
@@ -340,9 +353,9 @@ handleLeader evt _ =
         l <- use lLog
 
         return $ wrap $ Follower
-                      $ FollowerState { fCurrentTerm = term
-                                      , fVotedFor = Just sender
-                                      , fLog = l
+                      $ FollowerState { _fCurrentTerm = term
+                                      , _fVotedFor = Just sender
+                                      , _fLog = l
                                       }
 
 
@@ -350,9 +363,9 @@ handleLeader evt _ =
 initialize :: Config -> (SomeState a, [Command])
 initialize cfg = (wrap $ Follower state, commands)
   where
-    state = FollowerState { fCurrentTerm = Term 0
-                          , fVotedFor = Nothing
-                          , fLog = emptyLog
+    state = FollowerState { _fCurrentTerm = Term 0
+                          , _fVotedFor = Nothing
+                          , _fLog = emptyLog
                           }
     commands = [CResetTimeout $ CTElection (cfg ^. configElectionTimeout, 2 * cfg ^. configElectionTimeout)]
 
@@ -367,6 +380,6 @@ stateName s = case s of
 -- | Get the `Term' of `SomeState'.
 stateTerm :: SomeState a -> Term
 stateTerm s = case s of
-    WrapState (Follower FollowerState{..}) -> fCurrentTerm
+    WrapState (Follower s') -> s' ^. fCurrentTerm
     WrapState (Candidate s') -> s' ^. cCurrentTerm
     WrapState (Leader s') -> s' ^. lCurrentTerm
