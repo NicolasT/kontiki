@@ -70,11 +70,13 @@ data FollowerState a = FollowerState { fCurrentTerm :: Term
   deriving (Show, Eq)
 
 -- | State maintained by a node in `Candidate' mode.
-data CandidateState a = CandidateState { cCurrentTerm :: Term
-                                       , cVotes :: Set NodeId
-                                       , cLog :: Log a
+data CandidateState a = CandidateState { _cCurrentTerm :: Term
+                                       , _cVotes :: Set NodeId
+                                       , _cLog :: Log a
                                        }
   deriving (Show, Eq)
+
+makeLenses ''CandidateState
 
 -- | State maintained by a node in `Leader' mode.
 data LeaderState a = LeaderState { _lCurrentTerm :: Term

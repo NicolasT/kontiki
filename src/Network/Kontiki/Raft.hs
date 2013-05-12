@@ -143,88 +143,100 @@ handleFollower evt state0@(Follower fs0) = case evt of
 
         nodeId <- view configNodeId
 
-        let state = CandidateState { cCurrentTerm = nextTerm
-                                   , cVotes = Set.singleton nodeId
-                                   , cLog = fLog
+        let state = CandidateState { _cCurrentTerm = nextTerm
+                                   , _cVotes = Set.singleton nodeId
+                                   , _cLog = fLog
                                    }
 
+        let l = state ^. cLog
+            t = state ^. cCurrentTerm
+
         broadcast $ MRequestVote
-                  $ RequestVote { rvTerm = cCurrentTerm state
+                  $ RequestVote { rvTerm = t
                                 , rvCandidateId = nodeId
-                                , rvLastLogIndex = logLastIndex $ cLog state
-                                , rvLastLogTerm = logLastTerm $ cLog state
+                                , rvLastLogIndex = logLastIndex l
+                                , rvLastLogTerm = logLastTerm l
                                 }
 
         return $ wrap $ Candidate state
 
 
 -- | Handler for events when in `Candidate' state.
-handleCandidate :: Monad m => Handler Candidate a m
-handleCandidate evt state0@(Candidate cs0) = case evt of
-    EMessage sender msg -> case msg of
-        MRequestVote m -> handleRequestVote sender m
-        MRequestVoteResponse m -> handleRequestVoteResponse sender m
-        MHeartbeat m -> handleHeartbeat sender m
-    ETimeout t -> handleTimeout t
+handleCandidate :: (Functor m, Monad m) => Handler Candidate a m
+handleCandidate evt _ =
+    zoom candidateLens $ case evt of
+        EMessage sender msg -> case msg of
+            MRequestVote m -> handleRequestVote sender m
+            MRequestVoteResponse m -> handleRequestVoteResponse sender m
+            MHeartbeat m -> handleHeartbeat sender m
+        ETimeout t -> handleTimeout t
   where
-    ignore = return $ wrap state0
+    candidateLens = lens (\(Candidate s) -> s) (\_ s -> Candidate s)
+    ignore = (wrap . Candidate) `fmap` get
 
-    handleRequestVote sender RequestVote{..}
-      | rvTerm > cCurrentTerm cs0 = stepDown sender rvTerm
-      | otherwise = do
-            log [ B.byteString "Denying term "
-                , logTerm rvTerm
-                , B.byteString " to "
-                , B.byteString sender
-                ]
-            send sender $ MRequestVoteResponse
-                        $ RequestVoteResponse { rvrTerm = cCurrentTerm cs0
-                                              , rvrVoteGranted = False
-                                              }
-            ignore
+    handleRequestVote sender RequestVote{..} = do
+        currentTerm <- use cCurrentTerm
 
-    handleRequestVoteResponse sender RequestVoteResponse{..}
-      | rvrTerm < cCurrentTerm cs0 = do
-            logS "Ignoring RequestVoteResponse for old term"
-            ignore
-      | rvrTerm > cCurrentTerm cs0 = stepDown sender rvrTerm
-      | not rvrVoteGranted = do
-            logS "Ignoring RequestVoteResponse since vote wasn't granted"
-            ignore
-      | otherwise = do
-            logS "Received valid RequestVoteResponse"
+        if | rvTerm > currentTerm -> stepDown sender rvTerm
+           | otherwise -> do
+                 log [ B.byteString "Denying term "
+                     , logTerm rvTerm
+                     , B.byteString " to "
+                     , B.byteString sender
+                     ]
+                 send sender $ MRequestVoteResponse
+                             $ RequestVoteResponse { rvrTerm = currentTerm
+                                                   , rvrVoteGranted = False
+                                                   }
+                 ignore
 
-            let votes' = Set.insert sender $ cVotes cs0
+    handleRequestVoteResponse sender RequestVoteResponse{..} = do
+        currentTerm <- use cCurrentTerm
+        if | rvrTerm < currentTerm -> do
+                 logS "Ignoring RequestVoteResponse for old term"
+                 ignore
+           | rvrTerm > currentTerm -> stepDown sender rvrTerm
+           | not rvrVoteGranted -> do
+                 logS "Ignoring RequestVoteResponse since vote wasn't granted"
+                 ignore
+           | otherwise -> do
+                 logS "Received valid RequestVoteResponse"
 
-            m <- isMajority votes'
+                 votes <- Set.insert sender `fmap` use cVotes
 
-            if m
-                then becomeLeader
-                else return $ wrap $ Candidate cs0 { cVotes = votes' }
+                 m <- isMajority votes
 
-    handleHeartbeat sender (Heartbeat term)
-      | term > cCurrentTerm cs0 = stepDown sender term
-      | otherwise = do
-            logS "Ignoring heartbeat"
-            ignore
+                 if m
+                     then becomeLeader
+                     else get >>= \s -> return $ wrap $ Candidate $ s { _cVotes = votes }
+
+    handleHeartbeat sender (Heartbeat term) = do
+        currentTerm <- use cCurrentTerm
+        if | term > currentTerm -> stepDown sender term
+           | otherwise -> do
+                 logS "Ignoring heartbeat"
+                 ignore
 
     handleTimeout t = case t of
         ETElection -> do
             nodeId <- view configNodeId
+            currentTerm <- use cCurrentTerm
+            l <- use cLog
 
             logS "Election timeout occurred"
 
-            let state = CandidateState { cCurrentTerm = succTerm $ cCurrentTerm cs0
-                                       , cVotes = Set.singleton nodeId
-                                       , cLog = cLog cs0
+            let state = CandidateState { _cCurrentTerm = succTerm $ currentTerm
+                                       , _cVotes = Set.singleton nodeId
+                                       , _cLog = l
                                        }
 
             resetElectionTimeout
+
             broadcast $ MRequestVote
-                      $ RequestVote { rvTerm = cCurrentTerm state
+                      $ RequestVote { rvTerm = currentTerm
                                     , rvCandidateId = nodeId
-                                    , rvLastLogIndex = logLastIndex $ cLog state
-                                    , rvLastLogTerm = logLastTerm $ cLog state
+                                    , rvLastLogIndex = logLastIndex l
+                                    , rvLastLogTerm = logLastTerm l
                                     }
 
             return $ wrap $ Candidate state
@@ -245,24 +257,29 @@ handleCandidate evt state0@(Candidate cs0) = case evt of
                                           }
         resetElectionTimeout
 
+        l <- use cLog
+
         return $ wrap $ Follower
                       $ FollowerState { fCurrentTerm = term
                                       , fVotedFor = Just sender
-                                      , fLog = cLog cs0
+                                      , fLog = l
                                       }
 
     becomeLeader = do
+        currentTerm <- use cCurrentTerm
+        l <- use cLog
+
         log [ B.byteString "Becoming leader for term"
-            , logTerm $ cCurrentTerm cs0
+            , logTerm $ currentTerm
             ]
 
         resetHeartbeatTimeout
         broadcast $ MHeartbeat
-                  $ Heartbeat $ cCurrentTerm cs0
+                  $ Heartbeat $ currentTerm
 
         return $ wrap $ Leader
-                      $ LeaderState { _lCurrentTerm = cCurrentTerm cs0
-                                    , _lLog = cLog cs0
+                      $ LeaderState { _lCurrentTerm = currentTerm
+                                    , _lLog = l
                                     }
 
 -- | Handler for events when in `Leader' state.
@@ -351,5 +368,5 @@ stateName s = case s of
 stateTerm :: SomeState a -> Term
 stateTerm s = case s of
     WrapState (Follower FollowerState{..}) -> fCurrentTerm
-    WrapState (Candidate CandidateState{..}) -> cCurrentTerm
+    WrapState (Candidate s') -> s' ^. cCurrentTerm
     WrapState (Leader s') -> s' ^. lCurrentTerm
