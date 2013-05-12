@@ -77,11 +77,12 @@ data CandidateState a = CandidateState { cCurrentTerm :: Term
   deriving (Show, Eq)
 
 -- | State maintained by a node in `Leader' mode.
-data LeaderState a = LeaderState { lCurrentTerm :: Term
-                                 , lLog :: Log a
+data LeaderState a = LeaderState { _lCurrentTerm :: Term
+                                 , _lLog :: Log a
                                  }
   deriving (Show, Eq)
 
+makeLenses ''LeaderState
 
 -- | Modes a node can be in.
 data Mode = MFollower

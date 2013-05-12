@@ -1,4 +1,7 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving,
+             FlexibleInstances,
+             MultiParamTypeClasses,
+             TypeFamilies #-}
 module Network.Kontiki.Monad where
 
 import Control.Applicative (Applicative)
@@ -12,6 +15,7 @@ import qualified Data.ByteString.Builder as B
 import Control.Monad.RWS
 
 import Control.Lens
+import Control.Lens.Internal.Zoom
 
 import Network.Kontiki.Types
 
@@ -24,6 +28,12 @@ newtype TransitionT s m r = T { unTransitionT :: RWST Config [Command] s m r }
            , MonadState s
            , MonadRWS Config [Command] s
            )
+
+instance Monad z => Zoom (TransitionT s z) (TransitionT t z) s t where
+    zoom l t = T $ zoom l $ unTransitionT t
+
+type instance Zoomed (TransitionT s m) = FocusingWith [Command] m
+
 
 type Handler f a m = Event -> f a -> TransitionT (f a) m (SomeState a)
 

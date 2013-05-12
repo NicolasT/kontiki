@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs,
              RecordWildCards,
-             OverloadedStrings #-}
+             OverloadedStrings,
+             MultiWayIf #-}
 
 module Network.Kontiki.Raft (
       Config(..)
@@ -32,6 +33,8 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import qualified Data.ByteString.Builder as B
+
+import Control.Monad.State.Class (get)
 
 import Control.Lens
 
@@ -258,31 +261,36 @@ handleCandidate evt state0@(Candidate cs0) = case evt of
                   $ Heartbeat $ cCurrentTerm cs0
 
         return $ wrap $ Leader
-                      $ LeaderState { lCurrentTerm = cCurrentTerm cs0
-                                    , lLog = cLog cs0
+                      $ LeaderState { _lCurrentTerm = cCurrentTerm cs0
+                                    , _lLog = cLog cs0
                                     }
 
 -- | Handler for events when in `Leader' state.
-handleLeader :: Monad m => Handler Leader a m
-handleLeader evt state0@(Leader LeaderState{..}) = case evt of
-    EMessage sender msg -> case msg of
-        MRequestVote m -> handleRequestVote sender m
-        MRequestVoteResponse{} -> do
-            -- TODO Stepdown if rvrTerm > current?
-            logS "Ignoring RequestVoteResponse in leader state"
-            ignore
-        MHeartbeat m -> handleHeartbeat sender m
-    ETimeout t -> handleTimeout t
+handleLeader :: (Functor m, Monad m) => Handler Leader a m
+handleLeader evt _ =
+    zoom leaderLens $ case evt of
+        EMessage sender msg -> case msg of
+            MRequestVote m -> handleRequestVote sender m
+            MRequestVoteResponse{} -> do
+                -- TODO Stepdown if rvrTerm > current?
+                logS "Ignoring RequestVoteResponse in leader state"
+                ignore
+            MHeartbeat m -> handleHeartbeat sender m
+        ETimeout t -> handleTimeout t
   where
-    ignore = return $ wrap state0
+    leaderLens :: Lens' (Leader a) (LeaderState a)
+    leaderLens = lens (\(Leader s) -> s) (\_ s -> Leader s)
+    ignore = (wrap . Leader) `fmap` get
 
-    handleRequestVote sender RequestVote{..}
-      | rvTerm > lCurrentTerm = stepDown sender rvTerm
-      | otherwise = logS "Ignore RequestVote for old term" >> ignore
+    handleRequestVote sender RequestVote{..} = do
+        currentTerm <- use lCurrentTerm
+        if | rvTerm > currentTerm -> stepDown sender rvTerm
+           | otherwise -> logS "Ignore RequestVote for old term" >> ignore
 
-    handleHeartbeat sender (Heartbeat term)
-      | term > lCurrentTerm = stepDown sender term
-      | otherwise = logS "Ignore heartbeat of old term" >> ignore
+    handleHeartbeat sender (Heartbeat term) = do
+        currentTerm <- use lCurrentTerm
+        if | term > currentTerm -> stepDown sender term
+           | otherwise -> logS "Ignore heartbeat of old term" >> ignore
 
     handleTimeout t = case t of
         -- TODO Can this be ignored? Stepdown instead?
@@ -291,8 +299,11 @@ handleLeader evt state0@(Leader LeaderState{..}) = case evt of
             logS "Sending heartbeats"
 
             resetHeartbeatTimeout
+
+            currentTerm <- use lCurrentTerm
+
             broadcast $ MHeartbeat
-                      $ Heartbeat lCurrentTerm
+                      $ Heartbeat currentTerm
 
             ignore
 
@@ -309,10 +320,12 @@ handleLeader evt state0@(Leader LeaderState{..}) = case evt of
                                           }
         resetElectionTimeout
 
+        l <- use lLog
+
         return $ wrap $ Follower
                       $ FollowerState { fCurrentTerm = term
                                       , fVotedFor = Just sender
-                                      , fLog = lLog
+                                      , fLog = l
                                       }
 
 
@@ -339,4 +352,4 @@ stateTerm :: SomeState a -> Term
 stateTerm s = case s of
     WrapState (Follower FollowerState{..}) -> fCurrentTerm
     WrapState (Candidate CandidateState{..}) -> cCurrentTerm
-    WrapState (Leader LeaderState{..}) -> lCurrentTerm
+    WrapState (Leader s') -> s' ^. lCurrentTerm
