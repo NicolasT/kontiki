@@ -60,7 +60,7 @@ handle cfg evt state = case state of
     select (a, _, c) = (a, c)
 
 handleFollower :: (Functor m, Monad m) => Handler Follower a m
-handleFollower evt _ =
+handleFollower evt =
     zoom followerLens $ case evt of
         EMessage sender msg -> case msg of
             MRequestVote m -> handleRequestVote sender m
@@ -176,7 +176,7 @@ handleFollower evt _ =
 
 -- | Handler for events when in `Candidate' state.
 handleCandidate :: (Functor m, Monad m) => Handler Candidate a m
-handleCandidate evt _ =
+handleCandidate evt =
     zoom candidateLens $ case evt of
         EMessage sender msg -> case msg of
             MRequestVote m -> handleRequestVote sender m
@@ -297,7 +297,7 @@ handleCandidate evt _ =
 
 -- | Handler for events when in `Leader' state.
 handleLeader :: (Functor m, Monad m) => Handler Leader a m
-handleLeader evt _ =
+handleLeader evt =
     zoom leaderLens $ case evt of
         EMessage sender msg -> case msg of
             MRequestVote m -> handleRequestVote sender m
