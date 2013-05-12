@@ -2,7 +2,8 @@
              StandaloneDeriving,
              KindSignatures,
              DataKinds,
-             TemplateHaskell #-}
+             TemplateHaskell,
+             TypeFamilies #-}
 module Network.Kontiki.Types where
 
 import Data.Word
@@ -113,6 +114,12 @@ data State (s :: Mode) a where
 
 deriving instance Show a => Show (State s a)
 deriving instance Eq a => Eq (State s a)
+
+
+type family InternalState (s :: * -> *) :: * -> *
+type instance InternalState Follower = FollowerState
+type instance InternalState Candidate = CandidateState
+type instance InternalState Leader = LeaderState
 
 
 -- | Existential wrapper for `State'.

@@ -37,11 +37,12 @@ import qualified Data.ByteString.Builder as B
 import Control.Monad.State.Class (get)
 
 import Control.Lens
+import Control.Lens.Internal.Zoom (FocusingWith)
 
 import Network.Kontiki.Monad
 import Network.Kontiki.Types
 
--- | Utility to determine whether a set of votes forms a majority.
+-- | Utility to determine whether a)set of votes forms a majority.
 isMajority :: Monad m => Set NodeId -> TransitionT s m Bool
 isMajority votes = do
     nodes <- view configNodes
@@ -59,16 +60,46 @@ handle cfg evt state = case state of
   where
     select (a, _, c) = (a, c)
 
+
+type MessageHandler t f m a = NodeId -> t -> TransitionT (f a) m (SomeState a)
+type TimeoutHandler f m a = TransitionT (f a) m (SomeState a)
+
+-- TODO Simplify the first type madness
+-- This should somehow be something as simple as "Lens' (s a) (f a)"
+handleGeneric :: (Monad m, f ~ InternalState s)
+              => ((f a -> FocusingWith [Command] m (SomeState a) (f a)) -> s a -> FocusingWith [Command] m (SomeState a) (s a))
+              -> MessageHandler RequestVote f m a
+              -> MessageHandler RequestVoteResponse f m a
+              -> MessageHandler Heartbeat f m a
+              -> TimeoutHandler f m a
+              -> TimeoutHandler f m a
+              -> Handler s a m
+handleGeneric
+    zoomLens
+    handleRequestVote
+    handleRequestVoteResponse
+    handleHeartbeat
+    handleElectionTimeout
+    handleHeartbeatTimeout
+    event = zoom zoomLens $ case event of
+    EMessage sender msg -> case msg of
+        MRequestVote m -> handleRequestVote sender m
+        MRequestVoteResponse m -> handleRequestVoteResponse sender m
+        MHeartbeat m -> handleHeartbeat sender m
+    ETimeout t -> case t of
+        ETElection -> handleElectionTimeout
+        ETHeartbeat -> handleHeartbeatTimeout
+
+
 handleFollower :: (Functor m, Monad m) => Handler Follower a m
-handleFollower evt =
-    zoom followerLens $ case evt of
-        EMessage sender msg -> case msg of
-            MRequestVote m -> handleRequestVote sender m
-            MRequestVoteResponse{} -> do
-                logS "Received RequestVoteResponse message in Follower state, ignoring"
-                ignore
-            MHeartbeat m -> handleHeartbeat m
-        ETimeout t -> handleTimeout t
+handleFollower =
+    handleGeneric
+        followerLens
+        handleRequestVote
+        handleRequestVoteResponse
+        handleHeartbeat
+        handleElectionTimeout
+        handleHeartbeatTimeout
   where
     followerLens = lens (\(Follower s) -> s) (\_ s -> Follower s)
     ignore = (wrap . Follower) `fmap` get
@@ -127,7 +158,11 @@ handleFollower evt =
                                                  }
                ignore
 
-    handleHeartbeat (Heartbeat term) = do
+    handleRequestVoteResponse _ _ = do
+        logS "Received RequestVoteResponse message in Follower state, ignoring"
+        ignore
+
+    handleHeartbeat _ (Heartbeat term) = do
         currentTerm <- use fCurrentTerm
 
         if | term == currentTerm -> do
@@ -138,9 +173,11 @@ handleFollower evt =
                logS "Ignoring heartbeat"
                ignore
 
-    handleTimeout t = case t of
-        ETElection -> becomeCandidate
-        ETHeartbeat -> logS "Ignoring heartbeat timeout" >> ignore
+    handleElectionTimeout = becomeCandidate
+
+    handleHeartbeatTimeout = do
+        logS "Ignoring heartbeat timeout"
+        ignore
 
     -- TODO Handle single-node case
     becomeCandidate = do
@@ -176,13 +213,14 @@ handleFollower evt =
 
 -- | Handler for events when in `Candidate' state.
 handleCandidate :: (Functor m, Monad m) => Handler Candidate a m
-handleCandidate evt =
-    zoom candidateLens $ case evt of
-        EMessage sender msg -> case msg of
-            MRequestVote m -> handleRequestVote sender m
-            MRequestVoteResponse m -> handleRequestVoteResponse sender m
-            MHeartbeat m -> handleHeartbeat sender m
-        ETimeout t -> handleTimeout t
+handleCandidate =
+    handleGeneric
+        candidateLens
+        handleRequestVote
+        handleRequestVoteResponse
+        handleHeartbeat
+        handleElectionTimeout
+        handleHeartbeatTimeout
   where
     candidateLens = lens (\(Candidate s) -> s) (\_ s -> Candidate s)
     ignore = (wrap . Candidate) `fmap` get
@@ -230,32 +268,32 @@ handleCandidate evt =
                  logS "Ignoring heartbeat"
                  ignore
 
-    handleTimeout t = case t of
-        ETElection -> do
-            nodeId <- view configNodeId
-            currentTerm <- use cCurrentTerm
-            l <- use cLog
+    handleElectionTimeout = do
+        nodeId <- view configNodeId
+        currentTerm <- use cCurrentTerm
+        l <- use cLog
 
-            logS "Election timeout occurred"
+        logS "Election timeout occurred"
 
-            let state = CandidateState { _cCurrentTerm = succTerm $ currentTerm
-                                       , _cVotes = Set.singleton nodeId
-                                       , _cLog = l
-                                       }
+        let state = CandidateState { _cCurrentTerm = succTerm $ currentTerm
+                                   , _cVotes = Set.singleton nodeId
+                                   , _cLog = l
+                                   }
 
-            resetElectionTimeout
+        resetElectionTimeout
 
-            broadcast $ MRequestVote
-                      $ RequestVote { rvTerm = currentTerm
-                                    , rvCandidateId = nodeId
-                                    , rvLastLogIndex = logLastIndex l
-                                    , rvLastLogTerm = logLastTerm l
-                                    }
+        broadcast $ MRequestVote
+                  $ RequestVote { rvTerm = currentTerm
+                                , rvCandidateId = nodeId
+                                , rvLastLogIndex = logLastIndex l
+                                , rvLastLogTerm = logLastTerm l
+                                }
 
-            return $ wrap $ Candidate state
-        ETHeartbeat -> do
-            logS "Ignoring heartbeat timer timeout"
-            ignore
+        return $ wrap $ Candidate state
+
+    handleHeartbeatTimeout = do
+        logS "Ignoring heartbeat timer timeout"
+        ignore
 
     stepDown sender term = do
         log [ B.byteString "Stepping down, received term "
@@ -297,16 +335,14 @@ handleCandidate evt =
 
 -- | Handler for events when in `Leader' state.
 handleLeader :: (Functor m, Monad m) => Handler Leader a m
-handleLeader evt =
-    zoom leaderLens $ case evt of
-        EMessage sender msg -> case msg of
-            MRequestVote m -> handleRequestVote sender m
-            MRequestVoteResponse{} -> do
-                -- TODO Stepdown if rvrTerm > current?
-                logS "Ignoring RequestVoteResponse in leader state"
-                ignore
-            MHeartbeat m -> handleHeartbeat sender m
-        ETimeout t -> handleTimeout t
+handleLeader =
+    handleGeneric
+        leaderLens
+        handleRequestVote
+        handleRequestVoteResponse
+        handleHeartbeat
+        handleElectionTimeout
+        handleHeartbeatTimeout
   where
     leaderLens :: Lens' (Leader a) (LeaderState a)
     leaderLens = lens (\(Leader s) -> s) (\_ s -> Leader s)
@@ -317,25 +353,32 @@ handleLeader evt =
         if | rvTerm > currentTerm -> stepDown sender rvTerm
            | otherwise -> logS "Ignore RequestVote for old term" >> ignore
 
+    handleRequestVoteResponse _ _ = do
+        -- TODO Stepdown if rvrTerm > current?
+        logS "Ignoring RequestVoteResponse in leader state"
+        ignore
+
     handleHeartbeat sender (Heartbeat term) = do
         currentTerm <- use lCurrentTerm
         if | term > currentTerm -> stepDown sender term
            | otherwise -> logS "Ignore heartbeat of old term" >> ignore
 
-    handleTimeout t = case t of
+    handleElectionTimeout = do
         -- TODO Can this be ignored? Stepdown instead?
-        ETElection -> logS "Ignore election timeout" >> ignore
-        ETHeartbeat -> do
-            logS "Sending heartbeats"
+        logS "Ignore election timeout"
+        ignore
 
-            resetHeartbeatTimeout
+    handleHeartbeatTimeout = do
+        logS "Sending heartbeats"
 
-            currentTerm <- use lCurrentTerm
+        resetHeartbeatTimeout
 
-            broadcast $ MHeartbeat
-                      $ Heartbeat currentTerm
+        currentTerm <- use lCurrentTerm
 
-            ignore
+        broadcast $ MHeartbeat
+                  $ Heartbeat currentTerm
+
+        ignore
 
     stepDown sender term = do
         log [ B.byteString "Stepping down, received term "
