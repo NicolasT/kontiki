@@ -37,8 +37,8 @@ type instance Zoomed (TransitionT s m) = FocusingWith [Command] m
 
 type Handler f a m = Event -> TransitionT (f a) m (SomeState a)
 
-runTransitionT :: Handler f a m -> Config -> f a -> Event -> m (SomeState a, f a, [Command])
-runTransitionT h c s e = runRWST (unTransitionT $ h e) c s
+runTransitionT :: TransitionT (f a) m (SomeState a) -> Config -> f a -> m (SomeState a, f a, [Command])
+runTransitionT = runRWST . unTransitionT
 
 exec :: Monad m => Command -> TransitionT s m ()
 exec c = tell [c]

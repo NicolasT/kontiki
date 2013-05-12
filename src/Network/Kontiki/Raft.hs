@@ -51,11 +51,11 @@ isMajority votes = do
 handle :: (Functor m, Monad m) => Config -> Event -> SomeState a -> m (SomeState a, [Command])
 handle cfg evt state = case state of
     WrapState state'@Follower{} ->
-        select `fmap` runTransitionT handleFollower cfg state' evt
+        select `fmap` runTransitionT (handleFollower evt) cfg state'
     WrapState state'@Candidate{} ->
-        select `fmap` runTransitionT handleCandidate cfg state' evt
+        select `fmap` runTransitionT (handleCandidate evt) cfg state'
     WrapState state'@Leader{} ->
-        select `fmap` runTransitionT handleLeader cfg state' evt
+        select `fmap` runTransitionT (handleLeader evt) cfg state'
   where
     select (a, _, c) = (a, c)
 
