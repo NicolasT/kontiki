@@ -1,8 +1,16 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies,
+             OverloadedStrings #-}
 
 module Network.Kontiki.Raft.Utils (
-      handleGeneric
+      MessageHandler
+    , TimeoutHandler
+    , handleGeneric
+    , stepDown
     ) where
+
+import Prelude hiding (log)
+
+import qualified Data.ByteString.Builder as B
 
 import Control.Lens
 import Control.Lens.Internal.Zoom (FocusingWith)
@@ -39,3 +47,22 @@ handleGeneric
         ETElection -> handleElectionTimeout
         ETHeartbeat -> handleHeartbeatTimeout
 
+stepDown :: Monad m => NodeId -> Term -> Log a -> TransitionT s m (SomeState a)
+stepDown sender term l = do
+    log [ B.byteString "Stepping down, received term "
+        , logTerm term
+        , B.byteString " from "
+        , B.byteString sender
+        ]
+
+    send sender $ MRequestVoteResponse
+                $ RequestVoteResponse { rvrTerm = term
+                                      , rvrVoteGranted = True
+                                      }
+    resetElectionTimeout
+
+    return $ wrap $ Follower
+                  $ FollowerState { _fCurrentTerm = term
+                                  , _fVotedFor = Just sender
+                                  , _fLog = l
+                                  }
