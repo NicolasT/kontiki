@@ -19,6 +19,10 @@ Library
   Exposed-Modules:     Network.Kontiki.Raft
   Other-Modules:       Network.Kontiki.Monad
                      , Network.Kontiki.Types
+                     , Network.Kontiki.Raft.Utils
+                     , Network.Kontiki.Raft.Follower
+                     , Network.Kontiki.Raft.Candidate
+                     , Network.Kontiki.Raft.Leader
   Build-Depends:       base >= 4 && < 5
                      , mtl
                      , bytestring >= 0.10.2
