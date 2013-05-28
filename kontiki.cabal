@@ -17,17 +17,20 @@ Cabal-Version:       >=1.8
 
 Library
   Exposed-Modules:     Network.Kontiki.Raft
-  Other-Modules:       Network.Kontiki.Monad
-                     , Network.Kontiki.Types
-                     , Network.Kontiki.Raft.Utils
+  Other-Modules:       Network.Kontiki.Types
+                     , Network.Kontiki.Log
+                     , Network.Kontiki.Monad
                      , Network.Kontiki.Raft.Follower
                      , Network.Kontiki.Raft.Candidate
                      , Network.Kontiki.Raft.Leader
+                     , Network.Kontiki.Raft.Utils
   Build-Depends:       base >= 4 && < 5
                      , mtl
                      , bytestring >= 0.10.2
                      , containers
+                     , binary
                      , lens
+                     , QuickCheck
   Hs-Source-Dirs:      src
   Ghc-Options:         -Wall -fwarn-incomplete-patterns
 

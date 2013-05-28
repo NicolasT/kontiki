@@ -1,40 +1,30 @@
-{-# LANGUAGE GADTs,
-             MultiWayIf,
+{-# LANGUAGE MultiWayIf,
              RecordWildCards,
              OverloadedStrings #-}
 
-module Network.Kontiki.Raft.Follower (
-      handle
-    ) where
+module Network.Kontiki.Raft.Follower where
 
 import Prelude hiding (log)
 
-import Control.Monad.State.Class (get)
-
-import qualified Data.Set as Set
-
 import Data.ByteString.Char8 ()
-import qualified Data.ByteString.Builder as B
 
 import Control.Lens
 
+import Network.Kontiki.Log
 import Network.Kontiki.Types
 import Network.Kontiki.Monad
-import Network.Kontiki.Raft.Utils (MessageHandler, TimeoutHandler, handleGeneric)
+import Network.Kontiki.Raft.Utils
+import qualified Network.Kontiki.Raft.Candidate as Candidate
+import qualified Network.Kontiki.Raft.Leader as Leader
 
-currentState :: (Functor m, Monad m)
-             => TransitionT (FollowerState a) m (SomeState a)
-currentState = (wrap . Follower) `fmap` get
-
-handleRequestVote :: (Functor m, Monad m)
-                  => MessageHandler RequestVote FollowerState m a
-handleRequestVote sender msg@RequestVote{..} = do
+handleRequestVote :: (Functor m, Monad m, MonadLog m a)
+                  => MessageHandler RequestVote a Follower m
+handleRequestVote sender RequestVote{..} = do
     currentTerm <- use fCurrentTerm
 
     if | rvTerm < currentTerm -> do
            logS "Received RequestVote for old term"
-           send sender $ MRequestVoteResponse
-                       $ RequestVoteResponse { rvrTerm = currentTerm
+           send sender $ RequestVoteResponse { rvrTerm = currentTerm
                                              , rvrVoteGranted = False
                                              }
            currentState
@@ -44,120 +34,150 @@ handleRequestVote sender msg@RequestVote{..} = do
            fCurrentTerm .= rvTerm
            fVotedFor .= Nothing
 
-           handleRequestVote2 sender msg
+           handle'
        | otherwise -> do
-           logS "Recieved RequestVote for current term"
-           handleRequestVote2 sender msg
+           logS "Received RequestVote for current term"
+           handle'
+  where
+    handle' = do
+        votedFor <- use fVotedFor
+        currentTerm <- use fCurrentTerm
 
-handleRequestVote2 :: (Functor m, Monad m)
-                   => MessageHandler RequestVote FollowerState m a
-handleRequestVote2 sender RequestVote{..} = do
-    votedFor <- use fVotedFor
-    currentTerm <- use fCurrentTerm
-    l <- use fLog
+        if | votedFor /= Nothing && votedFor /= Just rvCandidateId -> do
+               logS "Granted vote to other node, rejecting"
+               send sender $ RequestVoteResponse { rvrTerm = currentTerm
+                                                 , rvrVoteGranted = False
+                                                 }
+               currentState
+           | otherwise -> do
+               e <- logLastEntry
 
-    if | (votedFor == Nothing || votedFor == Just rvCandidateId)
-           && (rvLastLogIndex >= logLastIndex l && rvLastLogTerm >= logLastTerm l) -> do
-           log [ B.byteString "Granting vote for term "
-               , logTerm rvTerm
-               , B.byteString " to "
-               , B.byteString sender
-               ]
+               let validTerm = maybe True (\e' -> rvLastLogTerm >= eTerm e') e
+                   validIndex = maybe True (\e' -> rvLastLogIndex >= eIndex e') e
 
-           send sender $ MRequestVoteResponse
-                       $ RequestVoteResponse { rvrTerm = currentTerm
-                                             , rvrVoteGranted = True
-                                             }
+               if validTerm && validIndex
+                   then do
+                       logS "Granting vote"
+                       send sender $ RequestVoteResponse { rvrTerm = currentTerm
+                                                         , rvrVoteGranted = True
+                                                         }
+                       fVotedFor .= Just sender
+                       resetElectionTimeout
+                   else do
+                       logS "Node out-of-date, rejecting vote"
+                       send sender $ RequestVoteResponse { rvrTerm = currentTerm
+                                                         , rvrVoteGranted = False
+                                                         }
 
-           resetElectionTimeout
-
-           get >>= \s -> return $ wrap $ Follower s{ _fVotedFor = Just sender }
-        | otherwise -> do
-           log [ B.byteString "Rejecting vote for term "
-               , logTerm rvTerm
-               , B.byteString " to "
-               , B.byteString sender
-               ]
-           send sender $ MRequestVoteResponse
-                       $ RequestVoteResponse { rvrTerm = currentTerm
-                                             , rvrVoteGranted = False
-                                             }
-           currentState
+               currentState
 
 handleRequestVoteResponse :: (Functor m, Monad m)
-                          => MessageHandler RequestVoteResponse FollowerState m a
-handleRequestVoteResponse _ _ = do
-    logS "Received RequestVoteResponse message in Follower state, ignoring"
-    currentState
-
-handleHeartbeat :: (Functor m, Monad m)
-                => MessageHandler Heartbeat FollowerState m a
-handleHeartbeat _ (Heartbeat term) = do
+                          => MessageHandler RequestVoteResponse a Follower m
+handleRequestVoteResponse _ RequestVoteResponse{..} = do
     currentTerm <- use fCurrentTerm
 
-    if | term == currentTerm -> do
-           logS "Received heartbeat"
-           resetElectionTimeout
+    if rvrTerm > currentTerm
+        then stepDown rvrTerm
+        else currentState
+
+handleAppendEntries :: (Functor m, Monad m, MonadLog m a)
+                    => MessageHandler (AppendEntries a) a Follower m
+handleAppendEntries sender AppendEntries{..} = do
+    currentTerm <- use fCurrentTerm
+    e <- logLastEntry
+    let lastIndex = maybe index0 eIndex e
+
+    if | aeTerm > currentTerm -> stepDown aeTerm
+       | aeTerm < currentTerm -> do
+           send sender $ AppendEntriesResponse { aerTerm = currentTerm
+                                               , aerSuccess = False
+                                               , aerLastIndex = lastIndex
+                                               }
            currentState
        | otherwise -> do
-           logS "Ignoring heartbeat"
-           currentState
+           e' <- logEntry aePrevLogIndex
+           let t = maybe term0 eTerm e'
 
-handleElectionTimeout :: (Functor m, Monad m)
-                      => TimeoutHandler FollowerState m a
-handleElectionTimeout = becomeCandidate
+           resetElectionTimeout
 
-handleHeartbeatTimeout :: (Functor m, Monad m)
-                       => TimeoutHandler FollowerState m a
-handleHeartbeatTimeout = do
-    logS "Ignoring heartbeat timeout"
+           if t /= aePrevLogTerm
+               then do
+                   send sender $ AppendEntriesResponse { aerTerm = aeTerm
+                                                       , aerSuccess = False
+                                                       , aerLastIndex = lastIndex
+                                                       }
+                   currentState
+               else do
+                   es <- dropWhileM checkTerm aeEntries
+                   lastIndex' <- if (not $ null es)
+                       then do
+                           truncateLog aePrevLogIndex
+                           logEntries es
+                           return $ eIndex $ last es
+                       else return lastIndex
+
+                   send sender $ AppendEntriesResponse { aerTerm = aeTerm
+                                                       , aerSuccess = True
+                                                       , aerLastIndex = lastIndex'
+                                                       }
+
+                   currentState
+
+checkTerm :: (Monad m, MonadLog m a)
+          => Entry a
+          -> m Bool
+checkTerm e = do
+    e' <- logEntry $ eIndex e
+    return $ case e' of
+        Nothing -> False
+        Just e'' -> eTerm e'' == eTerm e
+
+dropWhileM :: Monad m => (a -> m Bool) -> [a] -> m [a]
+dropWhileM p = loop
+  where
+    loop es = case es of
+        [] -> return []
+        (x : xs) -> do
+            q <- p x
+            if q
+                then dropWhileM p xs
+                else return xs
+
+
+handleAppendEntriesResponse :: (Functor m, Monad m)
+                            => MessageHandler AppendEntriesResponse a Follower m
+handleAppendEntriesResponse _ _ = do
+    logS "Received AppendEntriesResponse message in Follower state, ignoring"
     currentState
 
--- TODO Handle single-node case
-becomeCandidate :: (Functor m, Monad m)
-                => TransitionT (FollowerState a) m (SomeState a)
-becomeCandidate = do
+
+handleElectionTimeout :: (Functor m, Monad m, MonadLog m a)
+                      => TimeoutHandler ElectionTimeout a Follower m
+handleElectionTimeout = do
+    logS "Election timeout, stepping up"
+
     currentTerm <- use fCurrentTerm
     let nextTerm = succTerm currentTerm
 
-    log [ B.byteString "Becoming candidate for term "
-        , logTerm nextTerm
-        ]
+    fCurrentTerm .= nextTerm
 
-    resetElectionTimeout
+    quorum <- quorumSize
 
-    nodeId <- view configNodeId
-    l <- use fLog
+    if quorum == 1
+        then Leader.stepUp nextTerm
+        else Candidate.stepUp nextTerm
 
-    let state = CandidateState { _cCurrentTerm = nextTerm
-                               , _cVotes = Set.singleton nodeId
-                               , _cLog = l
-                               }
+handleHeartbeatTimeout :: (Functor m, Monad m)
+                       => TimeoutHandler HeartbeatTimeout a Follower m
+handleHeartbeatTimeout = do
+    logS "Ignoring heartbeat timeout in Follower state"
+    currentState
 
-    let l = state ^. cLog
-        t = state ^. cCurrentTerm
-
-    broadcast $ MRequestVote
-              $ RequestVote { rvTerm = t
-                            , rvCandidateId = nodeId
-                            , rvLastLogIndex = logLastIndex l
-                            , rvLastLogTerm = logLastTerm l
-                            }
-
-    return $ wrap $ Candidate state
-
-
-handle :: (Functor m, Monad m)
-       => Handler Follower a m
-handle =
-    handleGeneric
-        followerLens
-        handleRequestVote
-        handleRequestVoteResponse
-        handleHeartbeat
-        handleElectionTimeout
-        handleHeartbeatTimeout
-  where
-    followerLens = lens (\(Follower s) -> s) (\_ s -> Follower s)
-
-
+handle :: (Functor m, Monad m, MonadLog m a) => Handler a Follower m
+handle = handleGeneric
+            handleRequestVote
+            handleRequestVoteResponse
+            handleAppendEntries
+            handleAppendEntriesResponse
+            handleElectionTimeout
+            handleHeartbeatTimeout

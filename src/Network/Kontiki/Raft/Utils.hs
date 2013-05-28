@@ -1,68 +1,54 @@
 {-# LANGUAGE TypeFamilies,
+             ScopedTypeVariables,
+             FlexibleContexts,
              OverloadedStrings #-}
 
-module Network.Kontiki.Raft.Utils (
-      MessageHandler
-    , TimeoutHandler
-    , handleGeneric
-    , stepDown
-    ) where
+module Network.Kontiki.Raft.Utils where
 
-import Prelude hiding (log)
+import qualified Data.Set as Set
 
-import qualified Data.ByteString.Builder as B
+import Data.ByteString.Char8 ()
+
+import Control.Monad.State.Class (get)
 
 import Control.Lens
-import Control.Lens.Internal.Zoom (FocusingWith)
 
 import Network.Kontiki.Types
 import Network.Kontiki.Monad
 
-type MessageHandler t f m a = NodeId -> t -> TransitionT (f a) m (SomeState a)
-type TimeoutHandler f m a = TransitionT (f a) m (SomeState a)
+currentState :: (Functor m, Monad m, Wrapable t) => TransitionT a t m SomeState
+currentState = wrap `fmap` get
 
--- TODO Simplify the first type madness
--- This should somehow be something as simple as "Lens' (s a) (f a)"
-handleGeneric :: (Monad m, f ~ InternalState s)
-              => ((f a -> FocusingWith [Command] m (SomeState a) (f a)) -> s a -> FocusingWith [Command] m (SomeState a) (s a))
-              -> MessageHandler RequestVote f m a
-              -> MessageHandler RequestVoteResponse f m a
-              -> MessageHandler Heartbeat f m a
-              -> TimeoutHandler f m a
-              -> TimeoutHandler f m a
-              -> Handler s a m
 handleGeneric
-    zoomLens
     handleRequestVote
     handleRequestVoteResponse
-    handleHeartbeat
+    handleAppendEntries
+    handleAppendEntriesResponse
     handleElectionTimeout
     handleHeartbeatTimeout
-    event = zoom zoomLens $ case event of
-    EMessage sender msg -> case msg of
-        MRequestVote m -> handleRequestVote sender m
-        MRequestVoteResponse m -> handleRequestVoteResponse sender m
-        MHeartbeat m -> handleHeartbeat sender m
-    ETimeout t -> case t of
-        ETElection -> handleElectionTimeout
-        ETHeartbeat -> handleHeartbeatTimeout
+    event = case event of
+    EMessage s m -> case m of
+        MRequestVote m' -> handleRequestVote s m'
+        MRequestVoteResponse m' -> handleRequestVoteResponse s m'
+        MAppendEntries m' -> handleAppendEntries s m'
+        MAppendEntriesResponse m' -> handleAppendEntriesResponse s m'
+    EElectionTimeout -> handleElectionTimeout
+    EHeartbeatTimeout -> handleHeartbeatTimeout
 
-stepDown :: Monad m => NodeId -> Term -> Log a -> TransitionT s m (SomeState a)
-stepDown sender term l = do
-    log [ B.byteString "Stepping down, received term "
-        , logTerm term
-        , B.byteString " from "
-        , B.byteString sender
-        ]
+quorumSize :: Monad m => TransitionT a s m Int
+quorumSize = do
+    nodes <- view configNodes
 
-    send sender $ MRequestVoteResponse
-                $ RequestVoteResponse { rvrTerm = term
-                                      , rvrVoteGranted = True
-                                      }
+    return $ Set.size nodes `div` 2 + 1
+
+-- Can't have this in Follower due to recursive imports, bummer
+stepDown :: Monad m => Term -> TransitionT a f m SomeState
+stepDown term = do
+    logS "Stepping down to Follower state"
+
     resetElectionTimeout
+    resubmit
 
-    return $ wrap $ Follower
-                  $ FollowerState { _fCurrentTerm = term
-                                  , _fVotedFor = Just sender
-                                  , _fLog = l
+    return $ wrap $ FollowerState { _fCurrentTerm = term
+                                  , _fVotedFor = Nothing
                                   }

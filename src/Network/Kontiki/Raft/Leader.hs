@@ -1,89 +1,191 @@
-{-# LANGUAGE GADTs,
-             MultiWayIf,
+{-# LANGUAGE OverloadedStrings,
              RecordWildCards,
-             OverloadedStrings #-}
+             ScopedTypeVariables,
+             MultiWayIf #-}
 
-module Network.Kontiki.Raft.Leader (
-      handle
-    ) where
+module Network.Kontiki.Raft.Leader where
 
-import Prelude hiding (log)
+import Data.List (sortBy)
 
-import Control.Monad.State.Class (get)
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 import Data.ByteString.Char8 ()
 
-import Control.Lens
+import Control.Monad (when)
 
+import Control.Lens hiding (Index)
+
+import Network.Kontiki.Log
 import Network.Kontiki.Types
 import Network.Kontiki.Monad
-import Network.Kontiki.Raft.Utils (MessageHandler, TimeoutHandler, handleGeneric, stepDown)
-
-currentState :: (Functor m, Monad m)
-             => TransitionT (LeaderState a) m (SomeState a)
-currentState = (wrap . Leader) `fmap` get
+import Network.Kontiki.Raft.Utils
 
 handleRequestVote :: (Functor m, Monad m)
-                  => MessageHandler RequestVote LeaderState m a
+                  => MessageHandler RequestVote a Leader m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use lCurrentTerm
-    l <- use lLog
 
-    if | rvTerm > currentTerm -> stepDown sender rvTerm l
-       | otherwise -> do
-           logS "Ignore RequestVote for old term"
-           currentState
+    if rvTerm > currentTerm
+        then stepDown rvTerm
+        else do
+            logS "Not granting vote"
+            send sender $ RequestVoteResponse { rvrTerm = currentTerm
+                                              , rvrVoteGranted = False
+                                              }
+            currentState
 
 handleRequestVoteResponse :: (Functor m, Monad m)
-                          => MessageHandler RequestVoteResponse LeaderState m a
-handleRequestVoteResponse _ _ = do
-    -- TODO Stepdown if rvrTerm > current?
-    logS "Ignoring RequestVoteResponse in leader state"
-    currentState
-
-handleHeartbeat :: (Functor m, Monad m)
-                => MessageHandler Heartbeat LeaderState m a
-handleHeartbeat sender (Heartbeat term) = do
+                          => MessageHandler RequestVoteResponse a Leader m
+handleRequestVoteResponse _ RequestVoteResponse{..} = do
     currentTerm <- use lCurrentTerm
-    l <- use lLog
-    if | term > currentTerm -> stepDown sender term l
+
+    if rvrTerm > currentTerm
+        then stepDown rvrTerm
+        else currentState
+
+handleAppendEntries :: (Functor m, Monad m)
+                    => MessageHandler (AppendEntries a) a Leader m
+handleAppendEntries _ AppendEntries{..} = do
+    currentTerm <- use lCurrentTerm
+
+    if aeTerm > currentTerm
+        then stepDown aeTerm
+        else currentState
+
+handleAppendEntriesResponse :: (Functor m, Monad m)
+                            => MessageHandler AppendEntriesResponse a Leader m
+handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
+    currentTerm <- use lCurrentTerm
+
+    if | aerTerm < currentTerm -> do
+           logS "Ignoring old AppendEntriesResponse"
+           currentState
+       | aerTerm > currentTerm -> stepDown aerTerm
+       | not aerSuccess -> do
+           lNextIndex %= Map.alter (\i -> Just $ maybe index0 prevIndex i) sender
+           currentState
        | otherwise -> do
-           logS "Ignore heartbeat of old term"
+           lastIndices <- use lLastIndex
+           let li = maybe index0 id (Map.lookup sender lastIndices)
+           -- Ignore if this is an old message
+           when (aerLastIndex >= li) $ do
+               lLastIndex %= Map.insert sender aerLastIndex
+               lNextIndex %= Map.insert sender aerLastIndex
            currentState
 
 handleElectionTimeout :: (Functor m, Monad m)
-                      => TimeoutHandler LeaderState m a
-handleElectionTimeout = do
-    -- TODO Can this be ignored? Stepdown instead?
-    logS "Ignore election timeout"
-    currentState
+                      => TimeoutHandler ElectionTimeout a Leader m
+handleElectionTimeout = currentState
 
-handleHeartbeatTimeout :: (Functor m, Monad m)
-                       => TimeoutHandler LeaderState m a
+handleHeartbeatTimeout :: (Functor m, Monad m, MonadLog m a)
+                       => TimeoutHandler HeartbeatTimeout a Leader m
 handleHeartbeatTimeout = do
-    logS "Sending heartbeats"
-
     resetHeartbeatTimeout
 
     currentTerm <- use lCurrentTerm
 
-    broadcast $ MHeartbeat
-              $ Heartbeat currentTerm
+    lastEntry <- logLastEntry
+
+    lastIndices <- Map.elems `fmap` use lLastIndex
+    let sorted = sortBy (\a b -> compare b a) lastIndices
+    quorum <- quorumSize
+    let quorumIndex = sorted !! (quorum - 1)
+
+    e <- logEntry quorumIndex
+    let commitIndex =
+            if maybe term0 eTerm e >= currentTerm
+                then quorumIndex
+                else index0
+
+    nodes <- view configNodes
+    nodeId <- view configNodeId
+    let otherNodes = filter (/= nodeId) (Set.toList nodes)
+    mapM_ (sendAppendEntries lastEntry commitIndex) otherNodes
 
     currentState
 
+sendAppendEntries :: (Monad m, MonadLog m a)
+                  => Maybe (Entry a)
+                  -> Index
+                  -> NodeId
+                  -> TransitionT a LeaderState m ()
+sendAppendEntries lastEntry commitIndex node = do
+    currentTerm <- use lCurrentTerm
 
--- | Handler for events when in `Leader' state.
-handle :: (Functor m, Monad m)
-       => Handler Leader a m
-handle =
-    handleGeneric
-        leaderLens
-        handleRequestVote
-        handleRequestVoteResponse
-        handleHeartbeat
-        handleElectionTimeout
-        handleHeartbeatTimeout
-  where
-    leaderLens :: Lens' (Leader a) (LeaderState a)
-    leaderLens = lens (\(Leader s) -> s) (\_ s -> Leader s)
+    nextIndices <- use lNextIndex
+
+    let lastIndex = maybe index0 eIndex lastEntry
+        lastTerm = maybe term0 eTerm lastEntry
+        nextIndex = (Map.!) nextIndices node
+
+    let getEntries acc idx
+            | idx <= nextIndex = return acc
+            | otherwise = do
+                entry <- logEntry idx
+                -- TODO Handle failure
+                getEntries (maybe undefined id entry : acc) (prevIndex idx)
+
+    entries <- getEntries [] lastIndex
+
+    nodeId <- view configNodeId
+
+    if null entries
+        then send node $ AppendEntries { aeTerm = currentTerm
+                                       , aeLeaderId = nodeId
+                                       , aePrevLogIndex = lastIndex
+                                       , aePrevLogTerm = lastTerm
+                                       , aeEntries = []
+                                       , aeCommitIndex = commitIndex
+                                       }
+        else do
+            e <- logEntry (prevIndex $ eIndex $ head entries)
+            send node $ AppendEntries { aeTerm = currentTerm
+                                      , aeLeaderId = nodeId
+                                      , aePrevLogIndex = maybe index0 eIndex e
+                                      , aePrevLogTerm = maybe term0 eTerm e
+                                      , aeEntries = entries
+                                      , aeCommitIndex = commitIndex
+                                      }
+
+handle :: (Functor m, Monad m, MonadLog m a)
+       => Handler a Leader m
+handle = handleGeneric
+            handleRequestVote
+            handleRequestVoteResponse
+            handleAppendEntries
+            handleAppendEntriesResponse
+            handleElectionTimeout
+            handleHeartbeatTimeout
+
+
+stepUp :: (Functor m, Monad m, MonadLog m a)
+       => Term
+       -> TransitionT a f m SomeState
+stepUp t = do
+    logS "Becoming leader"
+
+    resetHeartbeatTimeout
+
+    e <- logLastEntry
+    let lastIndex = maybe index0 eIndex e
+        lastTerm = maybe term0 eTerm e
+
+    nodeId <- view configNodeId
+
+    broadcast $ AppendEntries { aeTerm = t
+                              , aeLeaderId = nodeId
+                              , aePrevLogIndex = lastIndex
+                              , aePrevLogTerm = lastTerm
+                              , aeEntries = []
+                              , aeCommitIndex = index0
+                              }
+
+    nodes <- view configNodes
+    let ni = Map.fromList $ map (\n -> (n, succIndex lastIndex)) (Set.toList nodes)
+        li = Map.fromList $ map (\n -> (n, index0)) (Set.toList nodes)
+
+    return $ wrap $ LeaderState { _lCurrentTerm = t
+                                , _lNextIndex = ni
+                                , _lLastIndex = li
+                                }

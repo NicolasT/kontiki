@@ -1,71 +1,73 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving,
              FlexibleInstances,
              MultiParamTypeClasses,
-             TypeFamilies #-}
+             TypeFamilies,
+             StandaloneDeriving #-}
+
 module Network.Kontiki.Monad where
 
-import Control.Applicative (Applicative)
+import Prelude hiding (log)
 
-import Data.Monoid
-
-import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder)
-import qualified Data.ByteString.Builder as B
-
+import Control.Applicative
 import Control.Monad.RWS
 
-import Control.Lens
-import Control.Lens.Internal.Zoom
+import Data.ByteString (ByteString)
+import Data.ByteString.Builder (Builder, byteString)
 
+import Control.Lens hiding (Index)
+
+import Network.Kontiki.Log
 import Network.Kontiki.Types
 
-newtype TransitionT s m r = T { unTransitionT :: RWST Config [Command] s m r }
+newtype TransitionT a s m r = TransitionT { unTransitionT :: RWST Config [Command a] s m r }
   deriving ( Functor
            , Applicative
            , Monad
            , MonadReader Config
-           , MonadWriter [Command]
+           , MonadWriter [Command a]
            , MonadState s
-           , MonadRWS Config [Command] s
+           , MonadRWS Config [Command a] s
+           , MonadTrans
            )
 
-instance Monad z => Zoom (TransitionT s z) (TransitionT t z) s t where
-    zoom l t = T $ zoom l $ unTransitionT t
+instance (Monad m, MonadLog m a) => MonadLog (TransitionT a f m) a where
+    logEntry = lift . logEntry
+    logLastEntry = lift logLastEntry
 
-type instance Zoomed (TransitionT s m) = FocusingWith [Command] m
-
-
-type Handler f a m = Event -> TransitionT (f a) m (SomeState a)
-
-runTransitionT :: TransitionT (f a) m (SomeState a) -> Config -> f a -> m (SomeState a, f a, [Command])
+runTransitionT :: TransitionT a s m r -> Config -> s -> m (r, s, [Command a])
 runTransitionT = runRWST . unTransitionT
 
-exec :: Monad m => Command -> TransitionT s m ()
-exec c = tell [c]
+broadcast :: (Monad m, IsMessage t a) => t -> TransitionT a f m ()
+broadcast m = tell [CBroadcast $ toMessage m]
 
-resetElectionTimeout :: Monad m => TransitionT s m ()
+send :: (Monad m, IsMessage t a) => NodeId -> t -> TransitionT a f m ()
+send n m = tell [CSend n (toMessage m)]
+
+resetElectionTimeout :: Monad m => TransitionT a f m ()
 resetElectionTimeout = do
     t <- view configElectionTimeout
-    exec $ CResetTimeout
-         $ CTElection (t, 2 * t)
+    tell [CResetElectionTimeout t (2 * t)]
 
-resetHeartbeatTimeout :: Monad m => TransitionT s m ()
+resetHeartbeatTimeout :: Monad m => TransitionT a f m ()
 resetHeartbeatTimeout = do
     t <- view configHeartbeatTimeout
-    exec $ CResetTimeout
-         $ CTHeartbeat t
+    tell [CResetHeartbeatTimeout t]
 
-broadcast :: Monad m => Message -> TransitionT s m ()
-broadcast = exec . CBroadcast
+log :: Monad m => Builder -> TransitionT a f m ()
+log b = tell [CLog b]
 
-send :: Monad m => NodeId -> Message -> TransitionT s m ()
-send n m = exec $ CSend n m
+logS :: Monad m => ByteString -> TransitionT a f m ()
+logS = log . byteString
 
-logS :: Monad m => ByteString -> TransitionT s m ()
-logS = exec . CLog . B.byteString
+resubmit :: Monad m => TransitionT a f m ()
+resubmit = tell [CResubmit]
 
-log :: Monad m => [Builder] -> TransitionT s m ()
-log = exec . CLog . mconcat
+truncateLog :: Monad m => Index -> TransitionT a f m ()
+truncateLog i = tell [CTruncateLog i]
 
-logTerm :: Term -> Builder
-logTerm (Term t) = B.string8 $ show t
+logEntries :: Monad m => [Entry a] -> TransitionT a f m ()
+logEntries es = tell [CLogEntries es]
+
+type Handler a s m = Event a -> TransitionT a (InternalState s) m SomeState
+type MessageHandler t a s m = NodeId -> t -> TransitionT a (InternalState s) m SomeState
+type TimeoutHandler t a s m = TransitionT a (InternalState s) m SomeState

@@ -1,72 +1,60 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs,
+             RankNTypes #-}
 
 module Network.Kontiki.Raft (
-      Config(..)
-    , initialize
-    , NodeId
-    , Message
-    , CTimeout(..)
-    , Command(..)
-    , Event(..)
-    , ETimeout(..)
+      module Network.Kontiki.Log
+    , module Network.Kontiki.Types
+    , module Network.Kontiki.Monad
     , handle
-    , Log
-    , emptyLog
-    , SomeState
-    , stateName
-    , Term
-    , stateTerm
+    , initialState
+    , restore
     ) where
 
--- TODO Implement proper consensus-based lease extension
--- TODO Get rid of tons of code duplication
--- TODO Cleanup export list
--- TODO Add Binary instances for, well, about everything
--- TODO Add Arbitrary instances for, well, about everything
+import qualified Data.Set as Set
+
+import Control.Monad.Identity (runIdentity)
 
 import Control.Lens
 
-import Network.Kontiki.Monad (runTransitionT)
+import Network.Kontiki.Log
 import Network.Kontiki.Types
+import Network.Kontiki.Monad
+import Network.Kontiki.Raft.Utils (stepDown)
 
 import qualified Network.Kontiki.Raft.Follower as Follower
 import qualified Network.Kontiki.Raft.Candidate as Candidate
 import qualified Network.Kontiki.Raft.Leader as Leader
 
--- | Top-level handler for `SomeState' input states.
-handle :: (Functor m, Monad m) => Config -> Event -> SomeState a -> m (SomeState a, [Command])
-handle cfg evt state = case state of
-    WrapState state'@Follower{} ->
-        select `fmap` runTransitionT (Follower.handle evt) cfg state'
-    WrapState state'@Candidate{} ->
-        select `fmap` runTransitionT (Candidate.handle evt) cfg state'
-    WrapState state'@Leader{} ->
-        select `fmap` runTransitionT (Leader.handle evt) cfg state'
+handle :: (Functor m, Monad m, MonadLog m a) => Config -> SomeState -> Event a -> m (SomeState, [Command a])
+handle config state event = case state of
+    WrapState(Follower s') -> select `fmap` runTransitionT (Follower.handle event) config s'
+    WrapState(Candidate s') -> select `fmap` runTransitionT (Candidate.handle event) config s'
+    WrapState(Leader s') -> select `fmap` runTransitionT (Leader.handle event) config s'
   where
     select (a, _, c) = (a, c)
 
+initialState :: SomeState
+initialState = wrap $ FollowerState { _fCurrentTerm = term0
+                                    , _fVotedFor = Nothing
+                                    }
 
--- | The initial state and commands for a new node to start.
-initialize :: Config -> (SomeState a, [Command])
-initialize cfg = (wrap $ Follower state, commands)
+restore :: Config -> SomeState -> (SomeState, [Command a])
+restore cfg s = case s of
+    WrapState(Follower s') -> run $ s' ^. fCurrentTerm
+    WrapState(Candidate s') -> run $ s' ^. cCurrentTerm
+    WrapState(Leader s') -> run $ s' ^. lCurrentTerm
   where
-    state = FollowerState { _fCurrentTerm = Term 0
-                          , _fVotedFor = Nothing
-                          , _fLog = emptyLog
-                          }
-    commands = [CResetTimeout $ CTElection (cfg ^. configElectionTimeout, 2 * cfg ^. configElectionTimeout)]
+    run :: forall a. Term -> (SomeState, [Command a])
+    run t = fixup $ runIdentity $ runTransitionT (stepDown t) cfg s
+    fixup (a, _, c) = (a, filter (not . isResubmit) c)
+    isResubmit c = case c of
+        CResubmit -> True
+        _ -> False
 
 
--- | Get a `String' representation of the current state `Mode'.
-stateName :: SomeState a -> String
-stateName s = case s of
-    WrapState Follower{} -> "Follower"
-    WrapState Candidate{} -> "Candidate"
-    WrapState Leader{} -> "Leader"
-
--- | Get the `Term' of `SomeState'.
-stateTerm :: SomeState a -> Term
-stateTerm s = case s of
-    WrapState (Follower s') -> s' ^. fCurrentTerm
-    WrapState (Candidate s') -> s' ^. cCurrentTerm
-    WrapState (Leader s') -> s' ^. lCurrentTerm
+singleNodeConfig :: NodeId -> Config
+singleNodeConfig n = Config { _configNodeId = n
+                            , _configNodes = Set.fromList [n]
+                            , _configElectionTimeout = 10000
+                            , _configHeartbeatTimeout = 5000
+                            }
