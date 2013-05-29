@@ -46,3 +46,15 @@ Executable kontiki-demo
                      , kontiki
   Hs-Source-Dirs:      bin
   Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
+
+Test-Suite kontiki-test
+  Type:                exitcode-stdio-1.0
+  Main-Is:             test.hs
+  Build-Depends:       base >= 4 && < 5
+                     , mtl
+                     , binary
+                     , test-framework
+                     , test-framework-quickcheck2
+                     , kontiki
+  Hs-Source-Dirs:      bin
+  Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
