@@ -92,6 +92,9 @@ handleHeartbeatTimeout = do
     quorum <- quorumSize
     let quorumIndex = sorted !! (quorum - 1)
 
+    -- TODO Check paper. CommitIndex can only be in current term if there's
+    -- a prior accepted item in the same term?
+
     e <- logEntry quorumIndex
     let commitIndex =
             if maybe term0 eTerm e >= currentTerm
