@@ -301,7 +301,6 @@ data Command a = CBroadcast (Message a)
                | CResetElectionTimeout Int Int
                | CResetHeartbeatTimeout Int
                | CLog Builder
-               | CResubmit
                | CTruncateLog Index
                | CLogEntries [Entry a]
   deriving (Show)
@@ -321,7 +320,6 @@ instance Arbitrary a => Arbitrary (Command a) where
                  , CResetElectionTimeout l l'
                  , CResetHeartbeatTimeout l
                  , CLog $ byteString n
-                 , CResubmit
                  , CTruncateLog i
                  , CLogEntries es
                  ]

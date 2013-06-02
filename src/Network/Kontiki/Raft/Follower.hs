@@ -73,11 +73,11 @@ handleRequestVote sender RequestVote{..} = do
 
 handleRequestVoteResponse :: (Functor m, Monad m)
                           => MessageHandler RequestVoteResponse a Follower m
-handleRequestVoteResponse _ RequestVoteResponse{..} = do
+handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use fCurrentTerm
 
     if rvrTerm > currentTerm
-        then stepDown rvrTerm
+        then stepDown sender rvrTerm
         else currentState
 
 handleAppendEntries :: (Functor m, Monad m, MonadLog m a)
@@ -87,7 +87,7 @@ handleAppendEntries sender AppendEntries{..} = do
     e <- logLastEntry
     let lastIndex = maybe index0 eIndex e
 
-    if | aeTerm > currentTerm -> stepDown aeTerm
+    if | aeTerm > currentTerm -> stepDown sender aeTerm
        | aeTerm < currentTerm -> do
            send sender $ AppendEntriesResponse { aerTerm = currentTerm
                                                , aerSuccess = False
@@ -111,7 +111,8 @@ handleAppendEntries sender AppendEntries{..} = do
                    es <- dropWhileM checkTerm aeEntries
                    lastIndex' <- if (not $ null es)
                        then do
-                           truncateLog aePrevLogIndex
+                           let truncateTo = prevIndex $ eIndex $ head es
+                           truncateLog truncateTo
                            logEntries es
                            return $ eIndex $ last es
                        else return lastIndex

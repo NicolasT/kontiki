@@ -59,9 +59,6 @@ log b = tell [CLog b]
 logS :: Monad m => ByteString -> TransitionT a f m ()
 logS = log . byteString
 
-resubmit :: Monad m => TransitionT a f m ()
-resubmit = tell [CResubmit]
-
 truncateLog :: Monad m => Index -> TransitionT a f m ()
 truncateLog i = tell [CTruncateLog i]
 

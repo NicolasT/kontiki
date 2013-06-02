@@ -21,7 +21,7 @@ handleRequestVote sender RequestVote{..} = do
     currentTerm <- use cCurrentTerm
 
     if rvTerm > currentTerm
-        then stepDown rvTerm
+        then stepDown sender rvTerm
         else do
             logS "Not granting vote"
             send sender $ RequestVoteResponse { rvrTerm = currentTerm
@@ -38,7 +38,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
     if | rvrTerm < currentTerm -> do
            logS "Ignoring RequestVoteResponse for old term"
            currentState
-       | rvrTerm > currentTerm -> stepDown rvrTerm
+       | rvrTerm > currentTerm -> stepDown sender rvrTerm
        | not rvrVoteGranted -> do
            logS "Ignoring RequestVoteResponse since vote wasn't granted"
            currentState
@@ -63,13 +63,13 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
 
 handleAppendEntries :: (Functor m, Monad m)
                     => MessageHandler (AppendEntries a) a Candidate m
-handleAppendEntries _ AppendEntries{..} = do
+handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use cCurrentTerm
 
     if currentTerm <= aeTerm
         then do
             logS "Received AppendEntries for current or newer term"
-            stepDown aeTerm
+            stepDown sender aeTerm
         else do
             logS "Ignoring AppendEntries for old term"
             currentState

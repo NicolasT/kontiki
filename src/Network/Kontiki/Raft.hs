@@ -40,16 +40,17 @@ initialState = wrap $ FollowerState { _fCurrentTerm = term0
 
 restore :: Config -> SomeState -> (SomeState, [Command a])
 restore cfg s = case s of
-    WrapState(Follower s') -> run $ s' ^. fCurrentTerm
-    WrapState(Candidate s') -> run $ s' ^. cCurrentTerm
-    WrapState(Leader s') -> run $ s' ^. lCurrentTerm
+    WrapState(Follower s') -> (s, commands)
+    WrapState(Candidate s') -> (toFollower (s' ^. cCurrentTerm), commands)
+    WrapState(Leader s') -> (toFollower (s' ^. lCurrentTerm), commands)
   where
-    run :: forall a. Term -> (SomeState, [Command a])
-    run t = fixup $ runIdentity $ runTransitionT (stepDown t) cfg s
-    fixup (a, _, c) = (a, filter (not . isResubmit) c)
-    isResubmit c = case c of
-        CResubmit -> True
-        _ -> False
+    toFollower t = wrap $ FollowerState { _fCurrentTerm = t
+                                        , _fVotedFor = Just nodeId
+                                        }
+    nodeId = cfg ^. configNodeId
+    et = cfg ^. configElectionTimeout
+    commands :: forall a. [Command a]
+    commands = [CResetElectionTimeout et (2 * et)]
 
 
 singleNodeConfig :: NodeId -> Config

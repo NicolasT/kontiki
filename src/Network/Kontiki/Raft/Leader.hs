@@ -27,7 +27,7 @@ handleRequestVote sender RequestVote{..} = do
     currentTerm <- use lCurrentTerm
 
     if rvTerm > currentTerm
-        then stepDown rvTerm
+        then stepDown sender rvTerm
         else do
             logS "Not granting vote"
             send sender $ RequestVoteResponse { rvrTerm = currentTerm
@@ -37,20 +37,20 @@ handleRequestVote sender RequestVote{..} = do
 
 handleRequestVoteResponse :: (Functor m, Monad m)
                           => MessageHandler RequestVoteResponse a Leader m
-handleRequestVoteResponse _ RequestVoteResponse{..} = do
+handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use lCurrentTerm
 
     if rvrTerm > currentTerm
-        then stepDown rvrTerm
+        then stepDown sender rvrTerm
         else currentState
 
 handleAppendEntries :: (Functor m, Monad m)
                     => MessageHandler (AppendEntries a) a Leader m
-handleAppendEntries _ AppendEntries{..} = do
+handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use lCurrentTerm
 
     if aeTerm > currentTerm
-        then stepDown aeTerm
+        then stepDown sender aeTerm
         else currentState
 
 handleAppendEntriesResponse :: (Functor m, Monad m)
@@ -61,7 +61,7 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
     if | aerTerm < currentTerm -> do
            logS "Ignoring old AppendEntriesResponse"
            currentState
-       | aerTerm > currentTerm -> stepDown aerTerm
+       | aerTerm > currentTerm -> stepDown sender aerTerm
        | not aerSuccess -> do
            lNextIndex %= Map.alter (\i -> Just $ maybe index0 prevIndex i) sender
            currentState

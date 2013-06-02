@@ -42,13 +42,16 @@ quorumSize = do
     return $ Set.size nodes `div` 2 + 1
 
 -- Can't have this in Follower due to recursive imports, bummer
-stepDown :: Monad m => Term -> TransitionT a f m SomeState
-stepDown term = do
+stepDown :: Monad m => NodeId -> Term -> TransitionT a f m SomeState
+stepDown sender term = do
     logS "Stepping down to Follower state"
 
     resetElectionTimeout
-    resubmit
+
+    send sender $ RequestVoteResponse { rvrTerm = term
+                                      , rvrVoteGranted = True
+                                      }
 
     return $ wrap $ FollowerState { _fCurrentTerm = term
-                                  , _fVotedFor = Nothing
+                                  , _fVotedFor = Just sender
                                   }
