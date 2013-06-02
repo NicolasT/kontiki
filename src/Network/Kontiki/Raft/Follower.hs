@@ -141,7 +141,7 @@ dropWhileM p = loop
             q <- p x
             if q
                 then dropWhileM p xs
-                else return xs
+                else return (x : xs)
 
 
 handleAppendEntriesResponse :: (Functor m, Monad m)
