@@ -18,6 +18,7 @@ module Network.Kontiki.Types (
     , Config(..), configNodeId, configNodes, configElectionTimeout, configHeartbeatTimeout
     , Follower, Candidate, Leader
     , State(..), SomeState(..), InternalState
+    , Mode(..), mode
     , Wrapable(wrap)
     , FollowerState(..), fCurrentTerm, fVotedFor
     , CandidateState(..), cCurrentTerm, cVotes
@@ -280,6 +281,13 @@ instance Arbitrary SomeState where
         WrapState (s'@Follower{}) -> map WrapState $ shrink s'
         WrapState (s'@Candidate{}) -> map WrapState $ shrink s'
         WrapState (s'@Leader{}) -> map WrapState $ shrink s'
+
+-- | Retrieve the `Mode' of `SomeState'.
+mode :: SomeState -> Mode
+mode s = case s of
+    WrapState Follower{} -> MFollower
+    WrapState Candidate{} -> MCandidate
+    WrapState Leader{} -> MLeader
 
 -- | Type family mapping a `State' to the corresponding internal state
 -- type.
