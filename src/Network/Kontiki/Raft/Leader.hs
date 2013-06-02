@@ -87,6 +87,9 @@ handleHeartbeatTimeout = do
 
     lastEntry <- logLastEntry
 
+    nodeId <- view configNodeId
+    lLastIndex %= Map.insert nodeId (maybe index0 eIndex lastEntry)
+
     lastIndices <- Map.elems `fmap` use lLastIndex
     let sorted = sortBy (\a b -> compare b a) lastIndices
     quorum <- quorumSize
