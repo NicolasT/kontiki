@@ -44,7 +44,8 @@ import qualified Data.Set as Set
 import Data.Word
 
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, byteString)
+import Data.ByteString.Lazy (toStrict)
+import Data.ByteString.Lazy.Builder (byteString,toLazyByteString)
 import qualified Data.ByteString.Char8 as BS8
 
 import Data.Binary (Binary(get, put))
@@ -336,7 +337,7 @@ data Command a = CBroadcast (Message a)        -- ^ Broadcast a `Message' to all
                | CSend NodeId (Message a)      -- ^ Send a `Message' to some given node
                | CResetElectionTimeout Int Int -- ^ Reset the election timeout timer to some random value in the given interval
                | CResetHeartbeatTimeout Int    -- ^ Reset the heartbeat timeout timer to the given time
-               | CLog Builder                  -- ^ Log a message
+               | CLog ByteString
                | CTruncateLog Index            -- ^ Truncate the log to given `Index'
                | CLogEntries [Entry a]         -- ^ Append some entries to the log
   deriving (Show)
@@ -355,7 +356,7 @@ instance Arbitrary a => Arbitrary (Command a) where
                  , CSend n m
                  , CResetElectionTimeout l l'
                  , CResetHeartbeatTimeout l
-                 , CLog $ byteString n
+                 , CLog $ toStrict $ toLazyByteString $ byteString n
                  , CTruncateLog i
                  , CLogEntries es
                  ]

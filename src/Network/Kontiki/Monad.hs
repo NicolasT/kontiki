@@ -12,7 +12,8 @@ import Control.Applicative
 import Control.Monad.RWS
 
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, byteString)
+import Data.ByteString.Lazy (toStrict)
+import Data.ByteString.Lazy.Builder (Builder, byteString,toLazyByteString)
 
 import Control.Lens hiding (Index)
 
@@ -54,7 +55,7 @@ resetHeartbeatTimeout = do
     tell [CResetHeartbeatTimeout t]
 
 log :: Monad m => Builder -> TransitionT a f m ()
-log b = tell [CLog b]
+log b = tell [CLog $ toStrict $ toLazyByteString $ b]
 
 logS :: Monad m => ByteString -> TransitionT a f m ()
 logS = log . byteString
