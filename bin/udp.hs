@@ -19,7 +19,7 @@ import Control.Concurrent.STM.TMVar
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.Char8 as LBS8
-import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Lazy.Builder as Builder
 
 import System.Environment (getArgs)
 import System.Random (randomRIO)
@@ -111,8 +111,8 @@ handleCommand s c = case c of
         Timer.reset (psHeartbeatTimer s) a
         return s
     CLog b -> do
-        let m = LBS8.unpack $ Builder.toLazyByteString b
-        putStrLn $ "Log: " ++ m
+        let m = BS8.unpack b
+        putStrLn $ "Log: " ++ (show m)
         return s
     CTruncateLog i -> do
         putStrLn $ "Truncate: " ++ show i

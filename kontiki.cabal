@@ -26,9 +26,9 @@ Library
                      , Network.Kontiki.Raft.Utils
   Build-Depends:       base >= 4 && < 5
                      , mtl
-                     , bytestring >= 0.10.2
+                     , bytestring
                      , containers
-                     , binary
+                     , binary >= 0.7.1
                      , lens
                      , QuickCheck
   Hs-Source-Dirs:      src
@@ -57,7 +57,7 @@ Executable kontiki-udp
                      , containers
                      , random
                      , network
-                     , binary
+                     , binary >= 0.7.1
                      , conduit
                      , network-conduit
                      , rolling-queue
@@ -71,7 +71,7 @@ Test-Suite kontiki-test
   Main-Is:             test.hs
   Build-Depends:       base >= 4 && < 5
                      , mtl
-                     , binary
+                     , binary >= 0.7.1
                      , test-framework
                      , test-framework-quickcheck2
                      , kontiki
