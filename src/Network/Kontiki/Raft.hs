@@ -10,16 +10,11 @@ module Network.Kontiki.Raft (
     , restore
     ) where
 
-import qualified Data.Set as Set
-
-import Control.Monad.Identity (runIdentity)
-
 import Control.Lens
 
 import Network.Kontiki.Log
 import Network.Kontiki.Types
 import Network.Kontiki.Monad
-import Network.Kontiki.Raft.Utils (stepDown)
 
 import qualified Network.Kontiki.Raft.Follower as Follower
 import qualified Network.Kontiki.Raft.Candidate as Candidate
@@ -40,7 +35,7 @@ initialState = wrap $ FollowerState { _fCurrentTerm = term0
 
 restore :: Config -> SomeState -> (SomeState, [Command a])
 restore cfg s = case s of
-    WrapState(Follower s') -> (s, commands)
+    WrapState(Follower _) -> (s, commands)
     WrapState(Candidate s') -> (toFollower (s' ^. cCurrentTerm), commands)
     WrapState(Leader s') -> (toFollower (s' ^. lCurrentTerm), commands)
   where
@@ -51,11 +46,3 @@ restore cfg s = case s of
     et = cfg ^. configElectionTimeout
     commands :: forall a. [Command a]
     commands = [CResetElectionTimeout et (2 * et)]
-
-
-singleNodeConfig :: NodeId -> Config
-singleNodeConfig n = Config { _configNodeId = n
-                            , _configNodes = Set.fromList [n]
-                            , _configElectionTimeout = 10000
-                            , _configHeartbeatTimeout = 5000
-                            }

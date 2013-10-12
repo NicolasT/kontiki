@@ -19,6 +19,20 @@ import Network.Kontiki.Monad
 currentState :: (Functor m, Monad m, Wrapable t) => TransitionT a t m SomeState
 currentState = wrap `fmap` get
 
+-- TODO Not sure why these *' variants are required... Trickyness with
+-- type-families etc. Would rather use the types exported from N.K.Monad
+-- instead
+type MessageHandler' t a i m = NodeId -> t -> TransitionT a i m SomeState
+type TimeoutHandler' t a i m = TransitionT a i m SomeState
+type Handler' a i m = Event a -> TransitionT a i m SomeState
+
+handleGeneric :: MessageHandler' RequestVote a i m
+              -> MessageHandler' RequestVoteResponse a i m
+              -> MessageHandler' (AppendEntries a) a i m
+              -> MessageHandler' AppendEntriesResponse a i m
+              -> TimeoutHandler' ElectionTimeout a i m
+              -> TimeoutHandler' HeartbeatTimeout a i m
+              -> Handler' a i m
 handleGeneric
     handleRequestVote
     handleRequestVoteResponse

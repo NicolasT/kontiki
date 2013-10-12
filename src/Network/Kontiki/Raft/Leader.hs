@@ -105,7 +105,6 @@ handleHeartbeatTimeout = do
                 else index0
 
     nodes <- view configNodes
-    nodeId <- view configNodeId
     let otherNodes = filter (/= nodeId) (Set.toList nodes)
     mapM_ (sendAppendEntries lastEntry commitIndex) otherNodes
 
@@ -163,7 +162,6 @@ handle = handleGeneric
             handleAppendEntriesResponse
             handleElectionTimeout
             handleHeartbeatTimeout
-
 
 stepUp :: (Functor m, Monad m, MonadLog m a)
        => Term
