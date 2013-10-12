@@ -41,6 +41,11 @@ quorumSize = do
 
     return $ Set.size nodes `div` 2 + 1
 
+isMajority :: Monad m => NodeSet -> TransitionT a s m Bool
+isMajority votes = do
+    quorum <- quorumSize
+    return $ Set.size votes >= quorum
+
 -- Can't have this in Follower due to recursive imports, bummer
 stepDown :: Monad m => NodeId -> Term -> TransitionT a f m SomeState
 stepDown sender term = do

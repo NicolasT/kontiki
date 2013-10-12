@@ -21,6 +21,7 @@ module Network.Kontiki.Types (
     , Mode(..), mode
     , Wrapable(wrap)
     , FollowerState(..), fCurrentTerm, fVotedFor
+    , NodeSet
     , CandidateState(..), cCurrentTerm, cVotes
     , LeaderState(..), lCurrentTerm, lNextIndex, lLastIndex
     , Command(..)
@@ -159,10 +160,11 @@ instance Arbitrary FollowerState where
         n <- arbitraryBS
         FollowerState <$> arbitrary <*> elements [Nothing, Just n]
 
+type NodeSet = Set NodeId
 
 -- | State kept when in `Candidate' mode.
 data CandidateState = CandidateState { _cCurrentTerm :: Term
-                                     , _cVotes :: Set NodeId
+                                     , _cVotes :: NodeSet
                                      }
   deriving (Show, Eq, Generic)
 makeLenses ''CandidateState

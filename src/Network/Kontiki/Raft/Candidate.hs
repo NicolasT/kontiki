@@ -49,10 +49,9 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
            logS "Received valid RequestVoteResponse"
            cVotes %= Set.insert sender
 
-           quorum <- quorumSize
-           votes' <- use cVotes
+           hasMajority <- isMajority =<< use cVotes
 
-           if Set.size votes' < quorum
+           if (not hasMajority)
                then do
                    logS "No majority yet"
                    currentState
