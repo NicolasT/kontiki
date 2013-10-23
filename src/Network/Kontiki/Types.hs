@@ -45,7 +45,7 @@ import qualified Data.Set as Set
 import Data.Word
 
 import Data.ByteString (ByteString)
-import Data.ByteString.Lazy.Builder (Builder, byteString)
+import Data.ByteString.Lazy.Builder (Builder, byteString, toLazyByteString)
 import qualified Data.ByteString.Char8 as BS8
 
 import Data.Binary (Binary(get, put))
@@ -341,7 +341,27 @@ data Command a = CBroadcast (Message a)        -- ^ Broadcast a `Message' to all
                | CLog Builder                  -- ^ Log a message
                | CTruncateLog Index            -- ^ Truncate the log to given `Index'
                | CLogEntries [Entry a]         -- ^ Append some entries to the log
-  deriving (Show)
+
+instance Show a => Show (Command a) where
+    showsPrec p c = showParen (p >= 11) $ case c of
+        CBroadcast m -> showString "CBroadcast "
+                      . showsPrec 11 m
+        CSend n m -> showString "CSend "
+                   . showsPrec 11 n
+                   . showChar ' '
+                   . showsPrec 11 m
+        CResetElectionTimeout m n -> showString "CResetElectionTimeout "
+                                   . showsPrec 11 m
+                                   . showChar ' '
+                                   . showsPrec 11 n
+        CResetHeartbeatTimeout t -> showString "CResetHeartbeatTimeout "
+                                  . showsPrec 11 t
+        CLog b -> showString "CLog "
+                . showsPrec 11 (toLazyByteString b)
+        CTruncateLog i -> showString "CTruncateLog "
+                        . showsPrec 11 i
+        CLogEntries es -> showString "CLogEntries "
+                        . showsPrec 11 es
 
 instance Arbitrary a => Arbitrary (Command a) where
     arbitrary = do
