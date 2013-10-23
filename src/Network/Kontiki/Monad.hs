@@ -12,7 +12,7 @@ import Control.Applicative
 import Control.Monad.RWS
 
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, byteString)
+import Data.ByteString.Lazy.Builder (Builder, byteString)
 
 import Control.Lens hiding (Index)
 

@@ -45,7 +45,7 @@ import qualified Data.Set as Set
 import Data.Word
 
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, byteString)
+import Data.ByteString.Lazy.Builder (Builder, byteString)
 import qualified Data.ByteString.Char8 as BS8
 
 import Data.Binary (Binary(get, put))

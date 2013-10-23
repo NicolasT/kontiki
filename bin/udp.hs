@@ -19,7 +19,7 @@ import Control.Concurrent.STM.TMVar
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.Char8 as LBS8
-import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Lazy.Builder as Builder
 
 import System.Environment (getArgs)
 import System.Random (randomRIO)
