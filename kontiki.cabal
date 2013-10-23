@@ -28,7 +28,7 @@ Library
                      , mtl
                      , bytestring >= 0.10
                      , containers
-                     , binary
+                     , binary >= 0.6.3
                      , lens
                      , QuickCheck
   Hs-Source-Dirs:      src
