@@ -1,7 +1,17 @@
 {-# LANGUAGE OverloadedStrings,
              RecordWildCards,
              MultiWayIf #-}
-
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Network.Kontiki.Raft.Candidate
+-- Copyright   :  (c) 2013, Nicolas Trangez
+-- License     :  BSD-like
+--
+-- Maintainer  :  ikke@nicolast.be
+--
+-- This module implements the behavior of a node in 
+-- `Network.Kontiki.Types.MCandidate' mode.
+-----------------------------------------------------------------------------
 module Network.Kontiki.Raft.Candidate where
 
 import qualified Data.Set as Set
@@ -16,6 +26,7 @@ import Network.Kontiki.Monad
 import Network.Kontiki.Raft.Utils
 import qualified Network.Kontiki.Raft.Leader as Leader
 
+-- | Handles `RequestVote'.
 handleRequestVote :: (Functor m, Monad m) => MessageHandler RequestVote a Candidate m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use cCurrentTerm
@@ -29,6 +40,7 @@ handleRequestVote sender RequestVote{..} = do
                                               }
             currentState
 
+-- | Handles `RequestVoteResponse'.
 handleRequestVoteResponse :: (Functor m, Monad m, MonadLog m a)
                           => MessageHandler RequestVoteResponse a Candidate m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
@@ -59,7 +71,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
                    logS "Reached a majority, becoming Leader"
                    Leader.stepUp currentTerm
 
-
+-- | Handles `AppendEntries'.
 handleAppendEntries :: (Functor m, Monad m)
                     => MessageHandler (AppendEntries a) a Candidate m
 handleAppendEntries sender AppendEntries{..} = do
@@ -73,12 +85,14 @@ handleAppendEntries sender AppendEntries{..} = do
             logS "Ignoring AppendEntries for old term"
             currentState
 
+-- | Handles `AppendEntriesResponse'.
 handleAppendEntriesResponse :: (Functor m, Monad m)
                             => MessageHandler AppendEntriesResponse a Candidate m
 handleAppendEntriesResponse _ _ = do
     logS "Ignoring AppendEntriesResponse message in Candidate mode"
     currentState
 
+-- | Handles `ElectionTimeout'.
 handleElectionTimeout :: (Functor m, Monad m, MonadLog m a)
                       => TimeoutHandler ElectionTimeout a Candidate m
 handleElectionTimeout = do
@@ -93,23 +107,24 @@ handleElectionTimeout = do
     let lastIndex = maybe index0 eIndex e
         lastTerm = maybe term0 eTerm e
 
-    broadcast $ RequestVote { rvTerm = nextTerm
-                            , rvCandidateId = nodeId
-                            , rvLastLogIndex = lastIndex
-                            , rvLastLogTerm = lastTerm
-                            }
+    broadcast RequestVote { rvTerm = nextTerm
+                          , rvCandidateId = nodeId
+                          , rvLastLogIndex = lastIndex
+                          , rvLastLogTerm = lastTerm
+                          }
 
-    return $ wrap $ CandidateState { _cCurrentTerm = nextTerm
-                                   , _cVotes = Set.singleton nodeId
-                                   }
+    return $ wrap CandidateState { _cCurrentTerm = nextTerm
+                                 , _cVotes = Set.singleton nodeId
+                                 }
 
-
+-- | Handles `HeartbeatTimeout'.
 handleHeartbeatTimeout :: (Functor m, Monad m)
                        => TimeoutHandler HeartbeatTimeout a Candidate m
 handleHeartbeatTimeout = do
     logS "Ignoring heartbeat timeout in Candidate state"
     currentState
 
+-- | `Handler' for `MCandidate' mode.
 handle :: (Functor m, Monad m, MonadLog m a)
        => Handler a Candidate m
 handle = handleGeneric
@@ -120,7 +135,8 @@ handle = handleGeneric
             handleElectionTimeout
             handleHeartbeatTimeout
 
-
+-- | Transitions into `MCandidate' mode with this `term'
+-- and resets the election timer. 
 stepUp :: (Functor m, Monad m, MonadLog m a)
        => Term
        -> TransitionT a s m SomeState
@@ -141,6 +157,6 @@ stepUp term = do
                             , rvLastLogTerm = lastTerm
                             }
 
-    return $ wrap $ CandidateState { _cCurrentTerm = term
-                                   , _cVotes = Set.singleton nodeId
-                                   }
+    return $ wrap CandidateState { _cCurrentTerm = term
+                                 , _cVotes = Set.singleton nodeId
+                                 }
