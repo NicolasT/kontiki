@@ -8,7 +8,7 @@
 --
 -- Maintainer  :  ikke@nicolast.be
 --
--- This module defines the abstract `MonadLog' type for an in-memory
+-- This module defines the abstract `MonadLog' class for a persistent
 -- log of `Entry'ies that a kontiki cluster aims to keep in sync across nodes. 
 -----------------------------------------------------------------------------
 module Network.Kontiki.Log where

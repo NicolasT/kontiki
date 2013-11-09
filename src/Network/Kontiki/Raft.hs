@@ -73,7 +73,9 @@ restore cfg s = case s of
     WrapState(Candidate s') -> (toFollower (s' ^. cCurrentTerm), commands)
     WrapState(Leader s') -> (toFollower (s' ^. lCurrentTerm), commands)
   where
-    toFollower t = wrap FollowerState{_fCurrentTerm = t, _fVotedFor = Just nodeId}
+    toFollower t = wrap FollowerState { _fCurrentTerm = t
+                                      , _fVotedFor = Just nodeId
+                                      }
     nodeId = cfg ^. configNodeId
     et = cfg ^. configElectionTimeout
     commands :: forall a. [Command a]
