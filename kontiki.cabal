@@ -81,3 +81,4 @@ Test-Suite kontiki-test
                      , kontiki
   Hs-Source-Dirs:      bin
   Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
+  Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded -fhpc -hpcdir dist/hpc

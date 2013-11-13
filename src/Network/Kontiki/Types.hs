@@ -9,31 +9,51 @@
              FlexibleInstances,
              ScopedTypeVariables,
              MultiParamTypeClasses #-}
-
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Network.Kontiki.Types
+-- Copyright   :  (c) 2013, Nicolas Trangez
+-- License     :  BSD-like
+--
+-- Maintainer  :  ikke@nicolast.be
+--
+-- Types that are commonly used through-out kontiki. Some of the most
+-- important types are defined here, like `Index', `Term', states
+-- for different modes, as well as events & commands 
+-- (see `"Network.Kontiki.Types#events_commands"') and messages 
+-- (see `"Network.Kontiki.Types#messages"').
+-----------------------------------------------------------------------------
 module Network.Kontiki.Types (
-      NodeId
+    
+    -- * General types
+      NodeId, NodeSet
     , Index(unIndex), index0, succIndex, prevIndex
     , Term, term0, succTerm
     , Entry(..)
     , Config(..), configNodeId, configNodes, configElectionTimeout, configHeartbeatTimeout
-    , Follower, Candidate, Leader
-    , State(..), SomeState(..), InternalState
-    , Mode(..), mode
-    , Wrapable(wrap)
+    
+    -- * Node states
     , FollowerState(..), fCurrentTerm, fVotedFor
-    , NodeSet
     , CandidateState(..), cCurrentTerm, cVotes
     , LeaderState(..), lCurrentTerm, lNextIndex, lLastIndex
-    , Command(..)
+    , Mode(..), mode
+    , Follower, Candidate, Leader
+    , State(..), SomeState(..), InternalState
+    , Wrapable(wrap)
+    
+    -- * Events and Commands
     , Event(..)
+    , ElectionTimeout
+    , HeartbeatTimeout
+    , Command(..)
+
+    -- * Messages
     , Message(..)
     , IsMessage(..)
     , RequestVote(..)
     , RequestVoteResponse(..)
     , AppendEntries(..)
     , AppendEntriesResponse(..)
-    , ElectionTimeout
-    , HeartbeatTimeout
     ) where
 
 import Control.Applicative
@@ -58,8 +78,15 @@ import Test.QuickCheck (Arbitrary(arbitrary, shrink), Gen, elements, listOf, lis
 
 import GHC.Generics
 
+-----------------------------------------------------------------------------
+-- * General types
+-----------------------------------------------------------------------------
+
 -- | Identifier of a node.
 type NodeId = ByteString
+
+-- | Set of `NodeId's
+type NodeSet = Set NodeId
 
 -- | Index of log entries.
 newtype Index = Index { unIndex :: Word64 }
@@ -125,12 +152,20 @@ instance Arbitrary a => Arbitrary (Entry a) where
         return $ Entry i t v
 
 -- | Configuration of a cluster.
-data Config = Config { _configNodeId :: NodeId        -- ^ `NodeId' of the running node
-                     , _configNodes :: Set NodeId     -- ^ Set of `NodeId's of all nodes in the cluster
-                     , _configElectionTimeout :: Int  -- ^ Election timeout
-                     , _configHeartbeatTimeout :: Int -- ^ Heartbeat timeout
-                     }
-  deriving (Show, Eq)
+data Config = Config { 
+    
+    -- | `NodeId' of the running node
+    _configNodeId           :: NodeId 
+   
+    -- | Set of `NodeId's of all nodes in the cluster       
+  , _configNodes            :: NodeSet
+ 
+    -- | Election timeout    
+  , _configElectionTimeout  :: Int           
+ 
+    -- | Heartbeat timeout
+  , _configHeartbeatTimeout :: Int           
+} deriving (Show, Eq)
 makeLenses ''Config
 
 instance Arbitrary Config where
@@ -145,10 +180,16 @@ instance Arbitrary Config where
 arbitraryBS :: Gen ByteString
 arbitraryBS = BS8.pack `fmap` listOf1 arbitrary
 
+-----------------------------------------------------------------------------
+-- * Node states
+--
+-- The following types encapsulate the state (and provide generally useful
+-- instances for the types) kept by nodes operating in different modes.
+-----------------------------------------------------------------------------
 
 -- | State kept when in `Follower' mode.
 data FollowerState = FollowerState { _fCurrentTerm :: Term
-                                   , _fVotedFor :: Maybe NodeId
+                                   , _fVotedFor    :: Maybe NodeId
                                    }
   deriving (Show, Eq, Generic)
 makeLenses ''FollowerState
@@ -160,11 +201,9 @@ instance Arbitrary FollowerState where
         n <- arbitraryBS
         FollowerState <$> arbitrary <*> elements [Nothing, Just n]
 
-type NodeSet = Set NodeId
-
 -- | State kept when in `Candidate' mode.
 data CandidateState = CandidateState { _cCurrentTerm :: Term
-                                     , _cVotes :: NodeSet
+                                     , _cVotes       :: NodeSet
                                      }
   deriving (Show, Eq, Generic)
 makeLenses ''CandidateState
@@ -176,11 +215,10 @@ instance Arbitrary CandidateState where
         v <- Set.fromList `fmap` listOf1 arbitraryBS
         CandidateState <$> arbitrary <*> pure v
 
-
 -- | State kept when in `Leader' mode.
 data LeaderState = LeaderState { _lCurrentTerm :: Term
-                               , _lNextIndex :: Map NodeId Index
-                               , _lLastIndex :: Map NodeId Index
+                               , _lNextIndex   :: Map NodeId Index
+                               , _lLastIndex   :: Map NodeId Index
                                }
   deriving (Show, Eq, Generic)
 makeLenses ''LeaderState
@@ -191,8 +229,6 @@ instance Arbitrary LeaderState where
     arbitrary = LeaderState <$> arbitrary
                             <*> (Map.fromList `fmap` (listOf1 $ (,) <$> arbitraryBS <*> arbitrary))
                             <*> (Map.fromList `fmap` (listOf1 $ (,) <$> arbitraryBS <*> arbitrary))
-
-
 -- | Running modes.
 data Mode = MFollower
           | MCandidate
@@ -200,9 +236,9 @@ data Mode = MFollower
   deriving (Show, Eq)
 
 -- * Utility type aliases for all running `Mode's.
-type Follower = State 'MFollower
-type Candidate = State 'MCandidate
-type Leader = State 'MLeader
+type Follower = State MFollower
+type Candidate = State MCandidate
+type Leader = State MLeader
 
 -- | State of a node.
 data State (s :: Mode) where
@@ -236,7 +272,6 @@ instance Binary Leader where
 instance Arbitrary Leader where
     arbitrary = Leader `fmap` arbitrary
     shrink (Leader s) = map Leader $ shrink s
-
 
 -- | Existential wrapper for `State'.
 --
@@ -312,25 +347,30 @@ instance Wrapable CandidateState where
 instance Wrapable LeaderState where
     wrap s = WrapState $ Leader s
 
+-----------------------------------------------------------------------------
+-- * Events and Commands
+-----------------------------------------------------------------------------
 
--- | Representation of an election timeout.
-data ElectionTimeout = ElectionTimeout
-  deriving (Show, Eq)
--- | Representation of a heartbeat timeout.
-data HeartbeatTimeout = HeartbeatTimeout
-  deriving (Show, Eq)
-
--- | Representation of some incoming event.
+-- | #events_commands# 
+-- Representation of some incoming event.
 data Event a = EMessage NodeId (Message a) -- ^ Incoming message from some node
              | EElectionTimeout            -- ^ Election timeout timer fired
              | EHeartbeatTimeout           -- ^ Heartbeat timeout timer fired
   deriving (Show, Eq)
-
+  
 instance Arbitrary a => Arbitrary (Event a) where
     arbitrary = do
         n <- arbitraryBS
         m <- arbitrary
         elements [EMessage n m, EElectionTimeout, EHeartbeatTimeout]
+  
+-- | Representation of an election timeout.
+data ElectionTimeout = ElectionTimeout
+  deriving (Show, Eq)
+  
+-- | Representation of a heartbeat timeout.
+data HeartbeatTimeout = HeartbeatTimeout
+  deriving (Show, Eq)
 
 -- | Representation of a command to be executed as the result of a state
 -- transition.
@@ -342,6 +382,14 @@ data Command a = CBroadcast (Message a)        -- ^ Broadcast a `Message' to all
                | CTruncateLog Index            -- ^ Truncate the log to given `Index'
                | CLogEntries [Entry a]         -- ^ Append some entries to the log
 
+{-| 
+  Manually created `Show' instance for `Command'.
+  
+  This instance has to be manually implemented
+  to maintain compatibility with newer versions
+  of "Data.ByteString.Builder" that no longer
+  define an instance of `Show'.
+-} 
 instance Show a => Show (Command a) where
     showsPrec p c = showParen (p >= 11) $ case c of
         CBroadcast m -> showString "CBroadcast "
@@ -382,73 +430,16 @@ instance Arbitrary a => Arbitrary (Command a) where
                  , CLogEntries es
                  ]
 
--- | Representation of a `RequestVote' request message.
-data RequestVote = RequestVote { rvTerm :: Term
-                               , rvCandidateId :: NodeId
-                               , rvLastLogIndex :: Index
-                               , rvLastLogTerm :: Term
-                               }
-  deriving (Show, Eq, Generic)
+-----------------------------------------------------------------------------
+-- * Messages
+-----------------------------------------------------------------------------
 
-instance Binary RequestVote
-
-instance Arbitrary RequestVote where
-    arbitrary = RequestVote <$> arbitrary
-                            <*> arbitraryBS
-                            <*> arbitrary
-                            <*> arbitrary
-
--- | Representation of a `RequestVoteResponse' message.
-data RequestVoteResponse = RequestVoteResponse { rvrTerm :: Term
-                                               , rvrVoteGranted :: Bool
-                                               }
-  deriving (Show, Eq, Generic)
-
-instance Binary RequestVoteResponse
-
-instance Arbitrary RequestVoteResponse where
-    arbitrary = RequestVoteResponse <$> arbitrary
-                                    <*> arbitrary
-
--- | Representation of an `AppendEntries' request message.
-data AppendEntries a = AppendEntries { aeTerm :: Term
-                                     , aeLeaderId :: NodeId
-                                     , aePrevLogIndex :: Index
-                                     , aePrevLogTerm :: Term
-                                     , aeEntries :: [Entry a]
-                                     , aeCommitIndex :: Index
-                                     }
-  deriving (Show, Eq, Generic)
-
-instance Binary a => Binary (AppendEntries a)
-
-instance Arbitrary a => Arbitrary (AppendEntries a) where
-    arbitrary = AppendEntries <$> arbitrary
-                              <*> arbitraryBS
-                              <*> arbitrary
-                              <*> arbitrary
-                              <*> arbitrary
-                              <*> arbitrary
-
--- | Representation of an `AppendEntriesResponse' message.
-data AppendEntriesResponse = AppendEntriesResponse { aerTerm :: Term
-                                                   , aerSuccess :: Bool
-                                                   , aerLastIndex :: Index
-                                                   }
-  deriving (Show, Eq, Generic)
-
-instance Binary AppendEntriesResponse
-
-instance Arbitrary AppendEntriesResponse where
-    arbitrary = AppendEntriesResponse <$> arbitrary
-                                      <*> arbitrary
-                                      <*> arbitrary
-
--- | Enumeration of all message types.
-data Message a = MRequestVote RequestVote
-               | MRequestVoteResponse RequestVoteResponse
-               | MAppendEntries (AppendEntries a)
-               | MAppendEntriesResponse AppendEntriesResponse
+-- | #messages# 
+-- Enumeration of all message types.
+data Message a = MRequestVote RequestVote                       -- ^ Wraps `RequestVote' 
+               | MRequestVoteResponse RequestVoteResponse       -- ^ Wraps `RequestVoteResponse'
+               | MAppendEntries (AppendEntries a)               -- ^ Wraps `AppendEntries'
+               | MAppendEntriesResponse AppendEntriesResponse   -- ^ Wraps `AppendEntriesResponse'
   deriving (Show, Eq, Generic)
 
 instance Binary a => Binary (Message a)
@@ -469,3 +460,113 @@ instance IsMessage RequestVote a where toMessage = MRequestVote
 instance IsMessage RequestVoteResponse a where toMessage = MRequestVoteResponse
 instance (a0 ~ a1) => IsMessage (AppendEntries a0) a1 where toMessage = MAppendEntries
 instance IsMessage AppendEntriesResponse a where toMessage = MAppendEntriesResponse
+
+-- | Message broadcast to all nodes in the cluster by a node 
+-- in `Candidate' mode in order to gather votes for it 
+-- to transition to  a `Leader'.
+-- See &#167; 5.2 of the paper.
+data RequestVote = RequestVote {
+    -- | `Candidate' 's `Term'
+    rvTerm :: Term
+ 
+    -- | `Candidate' requesting the vote
+  , rvCandidateId :: NodeId
+   
+    -- | `Index' of `Candidate' 's last log entry (&#167; 5.4)  
+  , rvLastLogIndex :: Index
+ 
+    -- | `Term' of `Candidate' 's last log entry (&#167; 5.4)
+  , rvLastLogTerm :: Term
+} deriving (Show, Eq, Generic)
+
+instance Binary RequestVote
+
+instance Arbitrary RequestVote where
+    arbitrary = RequestVote <$> arbitrary
+                            <*> arbitraryBS
+                            <*> arbitrary
+                            <*> arbitrary
+
+-- | Response to `RequestVote' message that indicates whether
+-- recipient node acknowledges the leader.
+--
+-- See &#167; 5.1, 5.2, 5.4 of the paper.
+data RequestVoteResponse = RequestVoteResponse { 
+  
+    -- | Current `term' for candidate to update itself,
+    --   in case it is not the leader with highest `Term'
+    rvrTerm         :: Term
+  
+    -- | `True' indicates `Candidate' received vote
+  , rvrVoteGranted  :: Bool
+} deriving (Show, Eq, Generic)
+
+instance Binary RequestVoteResponse
+
+instance Arbitrary RequestVoteResponse where
+    arbitrary = RequestVoteResponse <$> arbitrary
+                                    <*> arbitrary
+-- | Sent by `Leader' to replicate log entries (&#167; 5.3)
+--  
+-- Also used as heartbeat (&#167; 5.2), which is indicated by
+-- empty `aeEntries'.  
+data AppendEntries a =  AppendEntries { 
+
+    -- | `Leader' 's `Term'
+    aeTerm          :: Term
+      
+    -- | `Leader' 's `NodeId'
+  , aeLeaderId      :: NodeId
+    
+    -- | `Index' of log entry immediately preceding new ones
+  , aePrevLogIndex  :: Index
+    
+    -- | `Term' of `aePrevLogIndex' entry
+  , aePrevLogTerm   :: Term
+    
+    -- | Log entries to store (empty for heartbeat;
+    --   the `Leader' may decide to send more 
+    --   than one for efficiency)
+  , aeEntries       :: [Entry a]
+    
+    -- | `Leader' 's commit index
+  , aeCommitIndex   :: Index
+} deriving (Show, Eq, Generic)
+
+instance Binary a => Binary (AppendEntries a)
+
+instance Arbitrary a => Arbitrary (AppendEntries a) where
+    arbitrary = AppendEntries <$> arbitrary
+                              <*> arbitraryBS
+                              <*> arbitrary
+                              <*> arbitrary
+                              <*> arbitrary
+                              <*> arbitrary
+
+-- | Response to `AppendEntries'.
+--   
+-- Also used by `Follower's for recovery
+-- to indicate to `Leader' the missing events.
+-- See &#167; 5.3. 
+data AppendEntriesResponse = AppendEntriesResponse { 
+
+    -- | currentTerm, for `Leader' to update itself 
+    aerTerm         :: Term
+    
+    -- | true if `Follower' contained entry 
+    --   matching `aePrevLogIndex' and `asPrevLogTerm'
+  , aerSuccess      :: Bool
+    
+    -- | In case of `aerSuccess' being `False',
+    --   the `Follower' may indicate to `Leader'
+    --   what is it's last index, so that `Leader'
+    --   can bulk-replay the missing entries
+  , aerLastIndex    :: Index
+} deriving (Show, Eq, Generic)
+
+instance Binary AppendEntriesResponse
+
+instance Arbitrary AppendEntriesResponse where
+    arbitrary = AppendEntriesResponse <$> arbitrary
+                                      <*> arbitrary
+                                      <*> arbitrary

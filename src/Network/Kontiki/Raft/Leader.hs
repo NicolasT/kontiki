@@ -2,7 +2,17 @@
              RecordWildCards,
              ScopedTypeVariables,
              MultiWayIf #-}
-
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Network.Kontiki.Raft.Leader
+-- Copyright   :  (c) 2013, Nicolas Trangez
+-- License     :  BSD-like
+--
+-- Maintainer  :  ikke@nicolast.be
+--
+-- This module implements the behavior of a node in 
+-- `Network.Kontiki.Types.MLeader' mode.
+-----------------------------------------------------------------------------
 module Network.Kontiki.Raft.Leader where
 
 import Data.List (sortBy)
@@ -21,6 +31,7 @@ import Network.Kontiki.Types
 import Network.Kontiki.Monad
 import Network.Kontiki.Raft.Utils
 
+-- | Handles `RequestVote'.
 handleRequestVote :: (Functor m, Monad m)
                   => MessageHandler RequestVote a Leader m
 handleRequestVote sender RequestVote{..} = do
@@ -35,6 +46,7 @@ handleRequestVote sender RequestVote{..} = do
                                               }
             currentState
 
+-- | Handle `RequestVoteResponse'.
 handleRequestVoteResponse :: (Functor m, Monad m)
                           => MessageHandler RequestVoteResponse a Leader m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
@@ -44,6 +56,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
         then stepDown sender rvrTerm
         else currentState
 
+-- | Handles `AppendEntries'.
 handleAppendEntries :: (Functor m, Monad m)
                     => MessageHandler (AppendEntries a) a Leader m
 handleAppendEntries sender AppendEntries{..} = do
@@ -53,6 +66,7 @@ handleAppendEntries sender AppendEntries{..} = do
         then stepDown sender aeTerm
         else currentState
 
+-- | Handles `AppendEntriesResponse'.
 handleAppendEntriesResponse :: (Functor m, Monad m)
                             => MessageHandler AppendEntriesResponse a Leader m
 handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
@@ -74,10 +88,12 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
                lNextIndex %= Map.insert sender aerLastIndex
            currentState
 
+-- | Handles `ElectionTimeout'.
 handleElectionTimeout :: (Functor m, Monad m)
                       => TimeoutHandler ElectionTimeout a Leader m
 handleElectionTimeout = currentState
 
+-- | Handles `HeartbeatTimeout'.
 handleHeartbeatTimeout :: (Functor m, Monad m, MonadLog m a)
                        => TimeoutHandler HeartbeatTimeout a Leader m
 handleHeartbeatTimeout = do
@@ -110,10 +126,11 @@ handleHeartbeatTimeout = do
 
     currentState
 
+-- | Sends `AppendEntries' to a particular `NodeId'.
 sendAppendEntries :: (Monad m, MonadLog m a)
-                  => Maybe (Entry a)
-                  -> Index
-                  -> NodeId
+                  => Maybe (Entry a) -- ^ `Entry' to append
+                  -> Index           -- ^ `Index' up to which the `Follower' should commit
+                  -> NodeId          -- ^ `NodeId' to send to
                   -> TransitionT a LeaderState m ()
 sendAppendEntries lastEntry commitIndex node = do
     currentTerm <- use lCurrentTerm
@@ -136,23 +153,24 @@ sendAppendEntries lastEntry commitIndex node = do
     nodeId <- view configNodeId
 
     if null entries
-        then send node $ AppendEntries { aeTerm = currentTerm
-                                       , aeLeaderId = nodeId
-                                       , aePrevLogIndex = lastIndex
-                                       , aePrevLogTerm = lastTerm
-                                       , aeEntries = []
-                                       , aeCommitIndex = commitIndex
-                                       }
+        then send node AppendEntries { aeTerm = currentTerm
+                                     , aeLeaderId = nodeId
+                                     , aePrevLogIndex = lastIndex
+                                     , aePrevLogTerm = lastTerm
+                                     , aeEntries = []
+                                     , aeCommitIndex = commitIndex
+                                     }
         else do
             e <- logEntry (prevIndex $ eIndex $ head entries)
-            send node $ AppendEntries { aeTerm = currentTerm
-                                      , aeLeaderId = nodeId
-                                      , aePrevLogIndex = maybe index0 eIndex e
-                                      , aePrevLogTerm = maybe term0 eTerm e
-                                      , aeEntries = entries
-                                      , aeCommitIndex = commitIndex
-                                      }
+            send node AppendEntries { aeTerm = currentTerm
+                                    , aeLeaderId = nodeId
+                                    , aePrevLogIndex = maybe index0 eIndex e
+                                    , aePrevLogTerm = maybe term0 eTerm e
+                                    , aeEntries = entries
+                                    , aeCommitIndex = commitIndex
+                                    }
 
+-- | `Handler' for `MLeader' mode.
 handle :: (Functor m, Monad m, MonadLog m a)
        => Handler a Leader m
 handle = handleGeneric
@@ -163,8 +181,10 @@ handle = handleGeneric
             handleElectionTimeout
             handleHeartbeatTimeout
 
+-- | Transitions into `MLeader' mode by broadcasting heartbeat `AppendEntries'
+-- to all nodes and changing state to `LeaderState'. 
 stepUp :: (Functor m, Monad m, MonadLog m a)
-       => Term
+       => Term -- ^ `Term' of the `Leader'
        -> TransitionT a f m SomeState
 stepUp t = do
     logS "Becoming leader"

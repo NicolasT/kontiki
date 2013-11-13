@@ -1,7 +1,17 @@
 {-# LANGUAGE MultiWayIf,
              RecordWildCards,
              OverloadedStrings #-}
-
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Network.Kontiki.Raft.Follower
+-- Copyright   :  (c) 2013, Nicolas Trangez
+-- License     :  BSD-like
+--
+-- Maintainer  :  ikke@nicolast.be
+--
+-- This module implements the behavior of a node in 
+-- `Network.Kontiki.Types.MFollower' mode.
+-----------------------------------------------------------------------------
 module Network.Kontiki.Raft.Follower where
 
 import Prelude hiding (log)
@@ -17,6 +27,7 @@ import Network.Kontiki.Raft.Utils
 import qualified Network.Kontiki.Raft.Candidate as Candidate
 import qualified Network.Kontiki.Raft.Leader as Leader
 
+-- | Handles `RequestVote'.
 handleRequestVote :: (Functor m, Monad m, MonadLog m a)
                   => MessageHandler RequestVote a Follower m
 handleRequestVote sender RequestVote{..} = do
@@ -71,6 +82,7 @@ handleRequestVote sender RequestVote{..} = do
 
                currentState
 
+-- | Handles `RequestVoteResponse'.
 handleRequestVoteResponse :: (Functor m, Monad m)
                           => MessageHandler RequestVoteResponse a Follower m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
@@ -80,6 +92,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
         then stepDown sender rvrTerm
         else currentState
 
+-- | Handles `AppendEntries'.
 handleAppendEntries :: (Functor m, Monad m, MonadLog m a)
                     => MessageHandler (AppendEntries a) a Follower m
 handleAppendEntries sender AppendEntries{..} = do
@@ -124,6 +137,8 @@ handleAppendEntries sender AppendEntries{..} = do
 
                    currentState
 
+-- | Checks if we have an `Entry' at the index of `e'
+-- and if so, whether the terms of the entries match.
 checkTerm :: (Monad m, MonadLog m a)
           => Entry a
           -> m Bool
@@ -133,6 +148,7 @@ checkTerm e = do
         Nothing -> False
         Just e'' -> eTerm e'' == eTerm e
 
+-- | Monadic version of `dropWhile'.
 dropWhileM :: Monad m => (a -> m Bool) -> [a] -> m [a]
 dropWhileM p = loop
   where
@@ -144,14 +160,14 @@ dropWhileM p = loop
                 then dropWhileM p xs
                 else return (x : xs)
 
-
+-- | Handles `AppendEntriesResponse'.
 handleAppendEntriesResponse :: (Functor m, Monad m)
                             => MessageHandler AppendEntriesResponse a Follower m
 handleAppendEntriesResponse _ _ = do
     logS "Received AppendEntriesResponse message in Follower state, ignoring"
     currentState
 
-
+-- | Handle `ElectionTimeout'.
 handleElectionTimeout :: (Functor m, Monad m, MonadLog m a)
                       => TimeoutHandler ElectionTimeout a Follower m
 handleElectionTimeout = do
@@ -168,12 +184,14 @@ handleElectionTimeout = do
         then Leader.stepUp nextTerm
         else Candidate.stepUp nextTerm
 
+-- | Handles `HeartbeatTimeout'.
 handleHeartbeatTimeout :: (Functor m, Monad m)
                        => TimeoutHandler HeartbeatTimeout a Follower m
 handleHeartbeatTimeout = do
     logS "Ignoring heartbeat timeout in Follower state"
     currentState
 
+-- | `Handler' for `MFollower' mode.
 handle :: (Functor m, Monad m, MonadLog m a) => Handler a Follower m
 handle = handleGeneric
             handleRequestVote
