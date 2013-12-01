@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings,
              ScopedTypeVariables,
-             GADTs #-}
+             GADTs,
+             MultiWayIf #-}
 module Main (main) where
 
 import Control.Monad (foldM, forM, void)
@@ -25,7 +26,7 @@ import System.Random (randomRIO)
 
 import Network.Socket (SockAddr(SockAddrInet), inet_addr)
 
-import Control.Lens
+import Control.Lens hiding (Index)
 
 import qualified Data.Binary as B
 
@@ -35,7 +36,7 @@ import qualified Data.Conduit.Network.UDP as CNU
 
 import Network.Kontiki.Raft
     ( Command(..), Config(..), Entry(..), Event(..),
-      Message, NodeId, SomeState, unIndex)
+      Message, NodeId, SomeState, Index, index0, succIndex, unIndex)
 import qualified Network.Kontiki.Raft as Raft
 
 import Data.Kontiki.MemLog (Log, runMemLog)
@@ -69,6 +70,7 @@ data PlumbingState = PS { psElectionTimer :: Timer
                         , psMessages :: RollingQueue (Event Value)
                         , psChannels :: Map NodeId (RollingQueue (Message Value))
                         , psLog :: Log Value
+                        , psCommitIndex :: Index
                         }
 
 queueSize :: Int
@@ -85,6 +87,7 @@ newPlumbingState channels = do
                 , psMessages = q
                 , psChannels = channels
                 , psLog = MemLog.empty
+                , psCommitIndex = index0
                 }
 
 handleCommand :: PlumbingState -> Command Value -> IO PlumbingState
@@ -123,6 +126,19 @@ handleCommand s c = case c of
         let l = psLog s
             l' = foldr (\e -> MemLog.insert (fromIntegral $ unIndex $ eIndex e) e) l es
         return $ s { psLog = l' }
+    CSetCommitIndex i' -> do
+        let i = psCommitIndex s
+        putStrLn $ "New commit index, to commit: " ++ entriesToCommit i i'
+        return $ s { psCommitIndex = i' }
+
+entriesToCommit :: Index -> Index -> String
+entriesToCommit prev new =
+    if | new < prev  -> error "Committed entries could not be reverted"
+       | new == prev -> "nothing"
+       | new == next -> "entry " ++ show new
+       | otherwise   -> "entries " ++ show next ++ " to " ++ show new
+  where
+    next = succIndex prev
 
 handleCommands :: PlumbingState -> [Command Value] -> IO PlumbingState
 handleCommands = foldM handleCommand
