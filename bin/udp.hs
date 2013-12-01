@@ -14,7 +14,6 @@ import qualified Data.Set as Set
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.STM
-import Control.Concurrent.STM.TMVar
 
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
@@ -24,11 +23,10 @@ import qualified Data.ByteString.Lazy.Builder as Builder
 import System.Environment (getArgs)
 import System.Random (randomRIO)
 
-import Network.Socket (SockAddr(SockAddrInet), PortNumber(PortNum), inet_addr)
+import Network.Socket (SockAddr(SockAddrInet), inet_addr)
 
 import Control.Lens
 
-import Data.Binary (Binary)
 import qualified Data.Binary as B
 
 import Data.Conduit
@@ -36,11 +34,11 @@ import qualified Data.Conduit.List as CL
 import qualified Data.Conduit.Network.UDP as CNU
 
 import Network.Kontiki.Raft
-    ( Command(..), Config(..), Entry(..), Event(..), MonadLog(..),
+    ( Command(..), Config(..), Entry(..), Event(..),
       Message, NodeId, SomeState, unIndex)
 import qualified Network.Kontiki.Raft as Raft
 
-import Data.Kontiki.MemLog (Log, MemLog, runMemLog)
+import Data.Kontiki.MemLog (Log, runMemLog)
 import qualified Data.Kontiki.MemLog as MemLog
 
 import Data.STM.RollingQueue (RollingQueue)
@@ -146,8 +144,8 @@ run config' s ps = do
     ps'' <- case s' of
         Raft.WrapState (Raft.Leader ls) -> do
             let l = psLog ps'
-                s = IntMap.size l
-                (_, m) = if s /= 0
+                size = IntMap.size l
+                (_, m) = if size /= 0
                              then IntMap.findMax l
                              else (0, Entry { eTerm = Raft.term0
                                             , eIndex = Raft.index0
@@ -155,7 +153,7 @@ run config' s ps = do
                                             })
                 e = Entry { eTerm = ls ^. Raft.lCurrentTerm
                           , eIndex = Raft.succIndex (eIndex m)
-                          , eValue = (config' ^. Raft.configNodeId, s)
+                          , eValue = (config' ^. Raft.configNodeId, size)
                           }
                 l' = IntMap.insert (fromIntegral $ unIndex $ eIndex e) e l
             return $ ps' { psLog = l' }
