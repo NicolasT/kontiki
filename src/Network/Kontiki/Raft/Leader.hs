@@ -31,6 +31,7 @@ import Network.Kontiki.Types
 import Network.Kontiki.Monad
 import Network.Kontiki.Raft.Utils
 
+
 -- | Handles `RequestVote'.
 handleRequestVote :: (Functor m, Monad m)
                   => MessageHandler RequestVote a Leader m
@@ -91,7 +92,9 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
                lLastIndex %= Map.insert sender aerLastIndex
                lNextIndex %= Map.insert sender aerLastIndex
                newQuorumIndex <- quorumIndex
-               when (newQuorumIndex > commitIndex) $ setCommitIndex newQuorumIndex
+               when (newQuorumIndex > commitIndex) $ do
+                   lCommitIndex .= newQuorumIndex
+                   setCommitIndex newQuorumIndex
            currentState
 
 -- | Calculates current quorum `Index' from nodes' latest indices

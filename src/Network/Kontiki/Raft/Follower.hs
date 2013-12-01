@@ -134,7 +134,9 @@ handleAppendEntries sender AppendEntries{..} = do
                            return $ eIndex $ last es
                        else return lastIndex
 
-                   when (commitIndex /= aeCommitIndex) $ setCommitIndex aeCommitIndex
+                   when (commitIndex /= aeCommitIndex) $ do
+                       fCommitIndex .= aeCommitIndex
+                       setCommitIndex aeCommitIndex
 
                    send sender $ AppendEntriesResponse { aerTerm = aeTerm
                                                        , aerSuccess = True
