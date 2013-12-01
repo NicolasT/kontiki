@@ -20,6 +20,8 @@ import Data.ByteString.Char8 ()
 
 import Control.Lens
 
+import Control.Monad (when)
+
 import Network.Kontiki.Log
 import Network.Kontiki.Types
 import Network.Kontiki.Monad
@@ -87,9 +89,10 @@ handleRequestVoteResponse :: (Functor m, Monad m)
                           => MessageHandler RequestVoteResponse a Follower m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use fCurrentTerm
+    commitIndex <- use fCommitIndex
 
     if rvrTerm > currentTerm
-        then stepDown sender rvrTerm
+        then stepDown sender rvrTerm commitIndex
         else currentState
 
 -- | Handles `AppendEntries'.
@@ -97,10 +100,11 @@ handleAppendEntries :: (Functor m, Monad m, MonadLog m a)
                     => MessageHandler (AppendEntries a) a Follower m
 handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use fCurrentTerm
+    commitIndex <- use fCommitIndex
     e <- logLastEntry
     let lastIndex = maybe index0 eIndex e
 
-    if | aeTerm > currentTerm -> stepDown sender aeTerm
+    if | aeTerm > currentTerm -> stepDown sender aeTerm commitIndex
        | aeTerm < currentTerm -> do
            send sender $ AppendEntriesResponse { aerTerm = currentTerm
                                                , aerSuccess = False
@@ -129,6 +133,8 @@ handleAppendEntries sender AppendEntries{..} = do
                            logEntries es
                            return $ eIndex $ last es
                        else return lastIndex
+
+                   when (commitIndex /= aeCommitIndex) $ setCommitIndex aeCommitIndex
 
                    send sender $ AppendEntriesResponse { aerTerm = aeTerm
                                                        , aerSuccess = True
@@ -175,14 +181,15 @@ handleElectionTimeout = do
 
     currentTerm <- use fCurrentTerm
     let nextTerm = succTerm currentTerm
+    commitIndex <- use fCommitIndex
 
     fCurrentTerm .= nextTerm
 
     quorum <- quorumSize
 
     if quorum == 1
-        then Leader.stepUp nextTerm
-        else Candidate.stepUp nextTerm
+        then Leader.stepUp nextTerm commitIndex
+        else Candidate.stepUp nextTerm commitIndex
 
 -- | Handles `HeartbeatTimeout'.
 handleHeartbeatTimeout :: (Functor m, Monad m)

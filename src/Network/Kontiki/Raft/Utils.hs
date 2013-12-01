@@ -21,7 +21,7 @@ import Data.ByteString.Char8 ()
 
 import Control.Monad.State.Class (get)
 
-import Control.Lens
+import Control.Lens (view)
 
 import Network.Kontiki.Types
 import Network.Kontiki.Monad
@@ -84,8 +84,8 @@ isMajority votes = do
 -- `MFollower' mode.
 --  
 -- Can't have this in Follower due to recursive imports, bummer
-stepDown :: Monad m => NodeId -> Term -> TransitionT a f m SomeState
-stepDown sender term = do
+stepDown :: Monad m => NodeId -> Term -> Index -> TransitionT a f m SomeState
+stepDown sender term commitIndex = do
     logS "Stepping down to Follower state"
 
     resetElectionTimeout
@@ -95,5 +95,6 @@ stepDown sender term = do
                                     }
 
     return $ wrap FollowerState { _fCurrentTerm = term
+                                , _fCommitIndex = commitIndex
                                 , _fVotedFor = Just sender
                                 }

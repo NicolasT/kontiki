@@ -88,6 +88,10 @@ truncateLog i = tell [CTruncateLog i]
 logEntries :: Monad m => [Entry a] -> TransitionT a f m ()
 logEntries es = tell [CLogEntries es]
 
+-- | Sets new commit `Index' `i'
+setCommitIndex :: Monad m => Index -> TransitionT a f m ()
+setCommitIndex i = tell [CSetCommitIndex i]
+
 -- | Handler of events.
 type Handler a s m = 
                       Event a -- ^ `Event' to handle 

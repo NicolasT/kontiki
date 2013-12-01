@@ -54,7 +54,9 @@ handle config state event = case state of
 
 -- | Initial state of all nodes.
 initialState :: SomeState
-initialState = wrap FollowerState {_fCurrentTerm = term0, _fVotedFor = Nothing}
+initialState = wrap FollowerState {_fCurrentTerm = term0
+                                  , _fCommitIndex = index0
+                                  , _fVotedFor = Nothing}
 
 -- | Restores the node to initial (`Follower') mode
 -- and resets the election timeout. This function is useful
@@ -70,12 +72,13 @@ restore :: Config                   -- ^ configuration of the cluster
         -> (SomeState, [Command a]) -- ^ new state and list of commands
 restore cfg s = case s of
     WrapState(Follower _) -> (s, commands)
-    WrapState(Candidate s') -> (toFollower (s' ^. cCurrentTerm), commands)
-    WrapState(Leader s') -> (toFollower (s' ^. lCurrentTerm), commands)
+    WrapState(Candidate s') -> (toFollower (s' ^. cCurrentTerm) (s' ^. cCommitIndex), commands)
+    WrapState(Leader s') -> (toFollower (s' ^. lCurrentTerm) (s' ^. lCommitIndex), commands)
   where
-    toFollower t = wrap FollowerState { _fCurrentTerm = t
-                                      , _fVotedFor = Just nodeId
-                                      }
+    toFollower t i = wrap FollowerState { _fCurrentTerm = t
+                                        , _fCommitIndex = i
+                                        , _fVotedFor = Just nodeId
+                                        }
     nodeId = cfg ^. configNodeId
     et = cfg ^. configElectionTimeout
     commands :: forall a. [Command a]
