@@ -70,7 +70,7 @@ handleAppendEntries sender AppendEntries{..} = do
         else currentState
 
 -- | Handles `AppendEntriesResponse'.
-handleAppendEntriesResponse :: (Functor m, Monad m)
+handleAppendEntriesResponse :: (Functor m, Monad m, MonadLog m a)
                             => MessageHandler AppendEntriesResponse a Leader m
 handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
     currentTerm <- use lCurrentTerm
@@ -90,7 +90,18 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
            when (aerLastIndex >= li) $ do
                lLastIndex %= Map.insert sender aerLastIndex
                lNextIndex %= Map.insert sender aerLastIndex
+               newQuorumIndex <- quorumIndex
+               when (newQuorumIndex > commitIndex) $ setCommitIndex newQuorumIndex
            currentState
+
+-- | Calculates current quorum `Index' from nodes' latest indices
+quorumIndex :: (Functor m, Monad m, MonadLog m a)
+            => TransitionT a LeaderState m Index
+quorumIndex = do
+    lastIndices <- Map.elems `fmap` use lLastIndex
+    let sorted = sortBy (\a b -> compare b a) lastIndices
+    quorum <- quorumSize
+    return $ sorted !! (quorum - 1)
 
 -- | Handles `ElectionTimeout'.
 handleElectionTimeout :: (Functor m, Monad m)
@@ -103,26 +114,12 @@ handleHeartbeatTimeout :: (Functor m, Monad m, MonadLog m a)
 handleHeartbeatTimeout = do
     resetHeartbeatTimeout
 
-    currentTerm <- use lCurrentTerm
+    commitIndex <- use lCommitIndex
 
     lastEntry <- logLastEntry
 
     nodeId <- view configNodeId
     lLastIndex %= Map.insert nodeId (maybe index0 eIndex lastEntry)
-
-    lastIndices <- Map.elems `fmap` use lLastIndex
-    let sorted = sortBy (\a b -> compare b a) lastIndices
-    quorum <- quorumSize
-    let quorumIndex = sorted !! (quorum - 1)
-
-    -- TODO Check paper. CommitIndex can only be in current term if there's
-    -- a prior accepted item in the same term?
-
-    e <- logEntry quorumIndex
-    let commitIndex =
-            if maybe term0 eTerm e >= currentTerm
-                then quorumIndex
-                else index0
 
     nodes <- view configNodes
     let otherNodes = filter (/= nodeId) (Set.toList nodes)
