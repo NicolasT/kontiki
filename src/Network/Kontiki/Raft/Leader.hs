@@ -71,7 +71,7 @@ handleAppendEntries sender AppendEntries{..} = do
         else currentState
 
 -- | Handles `AppendEntriesResponse'.
-handleAppendEntriesResponse :: (Functor m, Monad m, MonadLog m a)
+handleAppendEntriesResponse :: (Functor m, Monad m)
                             => MessageHandler AppendEntriesResponse a Leader m
 handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
     currentTerm <- use lCurrentTerm
@@ -98,7 +98,7 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
            currentState
 
 -- | Calculates current quorum `Index' from nodes' latest indices
-quorumIndex :: (Functor m, Monad m, MonadLog m a)
+quorumIndex :: (Functor m, Monad m)
             => TransitionT a LeaderState m Index
 quorumIndex = do
     lastIndices <- Map.elems `fmap` use lLastIndex

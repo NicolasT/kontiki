@@ -54,9 +54,10 @@ handle config state event = case state of
 
 -- | Initial state of all nodes.
 initialState :: SomeState
-initialState = wrap FollowerState {_fCurrentTerm = term0
+initialState = wrap FollowerState { _fCurrentTerm = term0
                                   , _fCommitIndex = index0
-                                  , _fVotedFor = Nothing}
+                                  , _fVotedFor = Nothing
+                                  }
 
 -- | Restores the node to initial (`Follower') mode
 -- and resets the election timeout. This function is useful
