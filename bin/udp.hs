@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings,
              ScopedTypeVariables,
-             GADTs #-}
+             GADTs,
+             MultiWayIf #-}
 module Main (main) where
 
 import Control.Monad (foldM, forM, void)
@@ -14,7 +15,6 @@ import qualified Data.Set as Set
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.STM
-import Control.Concurrent.STM.TMVar
 
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
@@ -24,11 +24,10 @@ import qualified Data.ByteString.Lazy.Builder as Builder
 import System.Environment (getArgs)
 import System.Random (randomRIO)
 
-import Network.Socket (SockAddr(SockAddrInet), PortNumber(PortNum), inet_addr)
+import Network.Socket (SockAddr(SockAddrInet), inet_addr)
 
-import Control.Lens
+import Control.Lens hiding (Index)
 
-import Data.Binary (Binary)
 import qualified Data.Binary as B
 
 import Data.Conduit
@@ -36,11 +35,11 @@ import qualified Data.Conduit.List as CL
 import qualified Data.Conduit.Network.UDP as CNU
 
 import Network.Kontiki.Raft
-    ( Command(..), Config(..), Entry(..), Event(..), MonadLog(..),
-      Message, NodeId, SomeState, unIndex)
+    ( Command(..), Config(..), Entry(..), Event(..),
+      Message, NodeId, SomeState, Index, index0, succIndex, unIndex)
 import qualified Network.Kontiki.Raft as Raft
 
-import Data.Kontiki.MemLog (Log, MemLog, runMemLog)
+import Data.Kontiki.MemLog (Log, runMemLog)
 import qualified Data.Kontiki.MemLog as MemLog
 
 import Data.STM.RollingQueue (RollingQueue)
@@ -71,6 +70,7 @@ data PlumbingState = PS { psElectionTimer :: Timer
                         , psMessages :: RollingQueue (Event Value)
                         , psChannels :: Map NodeId (RollingQueue (Message Value))
                         , psLog :: Log Value
+                        , psCommitIndex :: Index
                         }
 
 queueSize :: Int
@@ -87,6 +87,7 @@ newPlumbingState channels = do
                 , psMessages = q
                 , psChannels = channels
                 , psLog = MemLog.empty
+                , psCommitIndex = index0
                 }
 
 handleCommand :: PlumbingState -> Command Value -> IO PlumbingState
@@ -125,6 +126,19 @@ handleCommand s c = case c of
         let l = psLog s
             l' = foldr (\e -> MemLog.insert (fromIntegral $ unIndex $ eIndex e) e) l es
         return $ s { psLog = l' }
+    CSetCommitIndex i' -> do
+        let i = psCommitIndex s
+        putStrLn $ "New commit index, to commit: " ++ entriesToCommit i i'
+        return $ s { psCommitIndex = i' }
+
+entriesToCommit :: Index -> Index -> String
+entriesToCommit prev new =
+    if | new < prev  -> error "Committed entries could not be reverted"
+       | new == prev -> "nothing"
+       | new == next -> "entry " ++ show new
+       | otherwise   -> "entries " ++ show next ++ " to " ++ show new
+  where
+    next = succIndex prev
 
 handleCommands :: PlumbingState -> [Command Value] -> IO PlumbingState
 handleCommands = foldM handleCommand
@@ -146,8 +160,8 @@ run config' s ps = do
     ps'' <- case s' of
         Raft.WrapState (Raft.Leader ls) -> do
             let l = psLog ps'
-                s = IntMap.size l
-                (_, m) = if s /= 0
+                size = IntMap.size l
+                (_, m) = if size /= 0
                              then IntMap.findMax l
                              else (0, Entry { eTerm = Raft.term0
                                             , eIndex = Raft.index0
@@ -155,7 +169,7 @@ run config' s ps = do
                                             })
                 e = Entry { eTerm = ls ^. Raft.lCurrentTerm
                           , eIndex = Raft.succIndex (eIndex m)
-                          , eValue = (config' ^. Raft.configNodeId, s)
+                          , eValue = (config' ^. Raft.configNodeId, size)
                           }
                 l' = IntMap.insert (fromIntegral $ unIndex $ eIndex e) e l
             return $ ps' { psLog = l' }

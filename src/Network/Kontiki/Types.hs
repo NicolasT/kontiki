@@ -33,9 +33,9 @@ module Network.Kontiki.Types (
     , Config(..), configNodeId, configNodes, configElectionTimeout, configHeartbeatTimeout
     
     -- * Node states
-    , FollowerState(..), fCurrentTerm, fVotedFor
-    , CandidateState(..), cCurrentTerm, cVotes
-    , LeaderState(..), lCurrentTerm, lNextIndex, lLastIndex
+    , FollowerState(..), fCurrentTerm, fCommitIndex, fVotedFor
+    , CandidateState(..), cCurrentTerm, cCommitIndex, cVotes
+    , LeaderState(..), lCurrentTerm, lCommitIndex, lNextIndex, lLastIndex
     , Mode(..), mode
     , Follower, Candidate, Leader
     , State(..), SomeState(..), InternalState
@@ -189,6 +189,7 @@ arbitraryBS = BS8.pack `fmap` listOf1 arbitrary
 
 -- | State kept when in `Follower' mode.
 data FollowerState = FollowerState { _fCurrentTerm :: Term
+                                   , _fCommitIndex :: Index
                                    , _fVotedFor    :: Maybe NodeId
                                    }
   deriving (Show, Eq, Generic)
@@ -199,10 +200,11 @@ instance Binary FollowerState
 instance Arbitrary FollowerState where
     arbitrary = do
         n <- arbitraryBS
-        FollowerState <$> arbitrary <*> elements [Nothing, Just n]
+        FollowerState <$> arbitrary <*> arbitrary <*> elements [Nothing, Just n]
 
 -- | State kept when in `Candidate' mode.
 data CandidateState = CandidateState { _cCurrentTerm :: Term
+                                     , _cCommitIndex :: Index
                                      , _cVotes       :: NodeSet
                                      }
   deriving (Show, Eq, Generic)
@@ -213,10 +215,11 @@ instance Binary CandidateState
 instance Arbitrary CandidateState where
     arbitrary = do
         v <- Set.fromList `fmap` listOf1 arbitraryBS
-        CandidateState <$> arbitrary <*> pure v
+        CandidateState <$> arbitrary <*> arbitrary <*> pure v
 
 -- | State kept when in `Leader' mode.
 data LeaderState = LeaderState { _lCurrentTerm :: Term
+                               , _lCommitIndex :: Index
                                , _lNextIndex   :: Map NodeId Index
                                , _lLastIndex   :: Map NodeId Index
                                }
@@ -227,6 +230,7 @@ instance Binary LeaderState
 
 instance Arbitrary LeaderState where
     arbitrary = LeaderState <$> arbitrary
+                            <*> arbitrary
                             <*> (Map.fromList `fmap` (listOf1 $ (,) <$> arbitraryBS <*> arbitrary))
                             <*> (Map.fromList `fmap` (listOf1 $ (,) <$> arbitraryBS <*> arbitrary))
 -- | Running modes.
@@ -381,6 +385,7 @@ data Command a = CBroadcast (Message a)        -- ^ Broadcast a `Message' to all
                | CLog Builder                  -- ^ Log a message
                | CTruncateLog Index            -- ^ Truncate the log to given `Index'
                | CLogEntries [Entry a]         -- ^ Append some entries to the log
+               | CSetCommitIndex Index         -- ^ Set new commit `Index'
 
 {-| 
   Manually created `Show' instance for `Command'.
@@ -410,6 +415,8 @@ instance Show a => Show (Command a) where
                         . showsPrec 11 i
         CLogEntries es -> showString "CLogEntries "
                         . showsPrec 11 es
+        CSetCommitIndex i -> showString "CSetCommitIndex "
+                        . showsPrec 11 i
 
 instance Arbitrary a => Arbitrary (Command a) where
     arbitrary = do

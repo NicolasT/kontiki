@@ -8,3 +8,6 @@ cabal-dev
 .dist-buildwrapper
 .project
 .settings
+.cabal-sandbox
+cabal.sandbox.config
+TAGS

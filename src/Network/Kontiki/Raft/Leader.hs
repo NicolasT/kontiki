@@ -31,14 +31,16 @@ import Network.Kontiki.Types
 import Network.Kontiki.Monad
 import Network.Kontiki.Raft.Utils
 
+
 -- | Handles `RequestVote'.
 handleRequestVote :: (Functor m, Monad m)
                   => MessageHandler RequestVote a Leader m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use lCurrentTerm
+    commitIndex <- use lCommitIndex
 
     if rvTerm > currentTerm
-        then stepDown sender rvTerm
+        then stepDown sender rvTerm commitIndex
         else do
             logS "Not granting vote"
             send sender $ RequestVoteResponse { rvrTerm = currentTerm
@@ -51,9 +53,10 @@ handleRequestVoteResponse :: (Functor m, Monad m)
                           => MessageHandler RequestVoteResponse a Leader m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use lCurrentTerm
+    commitIndex <- use lCommitIndex
 
     if rvrTerm > currentTerm
-        then stepDown sender rvrTerm
+        then stepDown sender rvrTerm commitIndex
         else currentState
 
 -- | Handles `AppendEntries'.
@@ -61,9 +64,10 @@ handleAppendEntries :: (Functor m, Monad m)
                     => MessageHandler (AppendEntries a) a Leader m
 handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use lCurrentTerm
+    commitIndex <- use lCommitIndex
 
     if aeTerm > currentTerm
-        then stepDown sender aeTerm
+        then stepDown sender aeTerm commitIndex
         else currentState
 
 -- | Handles `AppendEntriesResponse'.
@@ -71,11 +75,12 @@ handleAppendEntriesResponse :: (Functor m, Monad m)
                             => MessageHandler AppendEntriesResponse a Leader m
 handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
     currentTerm <- use lCurrentTerm
+    commitIndex <- use lCommitIndex
 
     if | aerTerm < currentTerm -> do
            logS "Ignoring old AppendEntriesResponse"
            currentState
-       | aerTerm > currentTerm -> stepDown sender aerTerm
+       | aerTerm > currentTerm -> stepDown sender aerTerm commitIndex
        | not aerSuccess -> do
            lNextIndex %= Map.alter (\i -> Just $ maybe index0 prevIndex i) sender
            currentState
@@ -86,7 +91,20 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
            when (aerLastIndex >= li) $ do
                lLastIndex %= Map.insert sender aerLastIndex
                lNextIndex %= Map.insert sender aerLastIndex
+               newQuorumIndex <- quorumIndex
+               when (newQuorumIndex > commitIndex) $ do
+                   lCommitIndex .= newQuorumIndex
+                   setCommitIndex newQuorumIndex
            currentState
+
+-- | Calculates current quorum `Index' from nodes' latest indices
+quorumIndex :: (Functor m, Monad m)
+            => TransitionT a LeaderState m Index
+quorumIndex = do
+    lastIndices <- Map.elems `fmap` use lLastIndex
+    let sorted = sortBy (\a b -> compare b a) lastIndices
+    quorum <- quorumSize
+    return $ sorted !! (quorum - 1)
 
 -- | Handles `ElectionTimeout'.
 handleElectionTimeout :: (Functor m, Monad m)
@@ -99,26 +117,12 @@ handleHeartbeatTimeout :: (Functor m, Monad m, MonadLog m a)
 handleHeartbeatTimeout = do
     resetHeartbeatTimeout
 
-    currentTerm <- use lCurrentTerm
+    commitIndex <- use lCommitIndex
 
     lastEntry <- logLastEntry
 
     nodeId <- view configNodeId
     lLastIndex %= Map.insert nodeId (maybe index0 eIndex lastEntry)
-
-    lastIndices <- Map.elems `fmap` use lLastIndex
-    let sorted = sortBy (\a b -> compare b a) lastIndices
-    quorum <- quorumSize
-    let quorumIndex = sorted !! (quorum - 1)
-
-    -- TODO Check paper. CommitIndex can only be in current term if there's
-    -- a prior accepted item in the same term?
-
-    e <- logEntry quorumIndex
-    let commitIndex =
-            if maybe term0 eTerm e >= currentTerm
-                then quorumIndex
-                else index0
 
     nodes <- view configNodes
     let otherNodes = filter (/= nodeId) (Set.toList nodes)
@@ -184,9 +188,10 @@ handle = handleGeneric
 -- | Transitions into `MLeader' mode by broadcasting heartbeat `AppendEntries'
 -- to all nodes and changing state to `LeaderState'. 
 stepUp :: (Functor m, Monad m, MonadLog m a)
-       => Term -- ^ `Term' of the `Leader'
+       => Term    -- ^ `Term' of the `Leader'
+       -> Index   -- ^ commit `Index'
        -> TransitionT a f m SomeState
-stepUp t = do
+stepUp term commitIndex = do
     logS "Becoming leader"
 
     resetHeartbeatTimeout
@@ -197,7 +202,7 @@ stepUp t = do
 
     nodeId <- view configNodeId
 
-    broadcast $ AppendEntries { aeTerm = t
+    broadcast $ AppendEntries { aeTerm = term
                               , aeLeaderId = nodeId
                               , aePrevLogIndex = lastIndex
                               , aePrevLogTerm = lastTerm
@@ -209,7 +214,8 @@ stepUp t = do
     let ni = Map.fromList $ map (\n -> (n, succIndex lastIndex)) (Set.toList nodes)
         li = Map.fromList $ map (\n -> (n, index0)) (Set.toList nodes)
 
-    return $ wrap $ LeaderState { _lCurrentTerm = t
+    return $ wrap $ LeaderState { _lCurrentTerm = term
+                                , _lCommitIndex = commitIndex
                                 , _lNextIndex = ni
                                 , _lLastIndex = li
                                 }

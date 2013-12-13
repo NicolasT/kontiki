@@ -18,7 +18,7 @@ import qualified Data.Set as Set
 
 import Data.ByteString.Char8 ()
 
-import Control.Lens
+import Control.Lens (use, view, (%=))
 
 import Network.Kontiki.Log
 import Network.Kontiki.Types
@@ -30,9 +30,10 @@ import qualified Network.Kontiki.Raft.Leader as Leader
 handleRequestVote :: (Functor m, Monad m) => MessageHandler RequestVote a Candidate m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use cCurrentTerm
+    commitIndex <- use cCommitIndex
 
     if rvTerm > currentTerm
-        then stepDown sender rvTerm
+        then stepDown sender rvTerm commitIndex
         else do
             logS "Not granting vote"
             send sender $ RequestVoteResponse { rvrTerm = currentTerm
@@ -45,12 +46,13 @@ handleRequestVoteResponse :: (Functor m, Monad m, MonadLog m a)
                           => MessageHandler RequestVoteResponse a Candidate m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use cCurrentTerm
+    commitIndex <- use cCommitIndex
     votes <- use cVotes
 
     if | rvrTerm < currentTerm -> do
            logS "Ignoring RequestVoteResponse for old term"
            currentState
-       | rvrTerm > currentTerm -> stepDown sender rvrTerm
+       | rvrTerm > currentTerm -> stepDown sender rvrTerm commitIndex
        | not rvrVoteGranted -> do
            logS "Ignoring RequestVoteResponse since vote wasn't granted"
            currentState
@@ -69,18 +71,19 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
                    currentState
                else do
                    logS "Reached a majority, becoming Leader"
-                   Leader.stepUp currentTerm
+                   Leader.stepUp currentTerm commitIndex
 
 -- | Handles `AppendEntries'.
 handleAppendEntries :: (Functor m, Monad m)
                     => MessageHandler (AppendEntries a) a Candidate m
 handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use cCurrentTerm
+    commitIndex <- use cCommitIndex
 
     if currentTerm <= aeTerm
         then do
             logS "Received AppendEntries for current or newer term"
-            stepDown sender aeTerm
+            stepDown sender aeTerm commitIndex
         else do
             logS "Ignoring AppendEntries for old term"
             currentState
@@ -102,6 +105,7 @@ handleElectionTimeout = do
 
     nodeId <- view configNodeId
     nextTerm <- succTerm `fmap` use cCurrentTerm
+    commitIndex <- use cCommitIndex
 
     e <- logLastEntry
     let lastIndex = maybe index0 eIndex e
@@ -114,6 +118,7 @@ handleElectionTimeout = do
                           }
 
     return $ wrap CandidateState { _cCurrentTerm = nextTerm
+                                 , _cCommitIndex = commitIndex
                                  , _cVotes = Set.singleton nodeId
                                  }
 
@@ -139,8 +144,9 @@ handle = handleGeneric
 -- and resets the election timer. 
 stepUp :: (Functor m, Monad m, MonadLog m a)
        => Term
+       -> Index
        -> TransitionT a s m SomeState
-stepUp term = do
+stepUp term commitIndex = do
     logS "Becoming candidate"
 
     resetElectionTimeout
@@ -158,5 +164,6 @@ stepUp term = do
                             }
 
     return $ wrap CandidateState { _cCurrentTerm = term
+                                 , _cCommitIndex = commitIndex
                                  , _cVotes = Set.singleton nodeId
                                  }
