@@ -59,7 +59,6 @@ module Network.Kontiki.Types (
     , arbitraryBS
     ) where
 
-import Data.ByteString.Lazy (toStrict)
 import Control.Applicative
 
 import Data.Map (Map)
@@ -399,12 +398,12 @@ data Command a = CBroadcast (Message a)        -- ^ Broadcast a `Message' to all
   of "Data.ByteString.Builder" that no longer
   define an instance of `Eq'.
 -}  
-instance Eq a => Eq (Network.Kontiki.Types.Command a) where
+instance Eq a => Eq (Command a) where
     CBroadcast a1 == CBroadcast a2 = a1 == a2
     CSend n1 a1 == CSend n2 a2 = n1 == n2 && a1 == a2
     CResetElectionTimeout l1 r1 == CResetElectionTimeout l2 r2 = l1 == l2 && r1 == r2
     CResetHeartbeatTimeout h1 == CResetHeartbeatTimeout h2 = h1 == h2
-    CLog b1 == CLog b2 = ( BS8.unpack $ toStrict . toLazyByteString $ b1) == (BS8.unpack $ toStrict . toLazyByteString $ b2)
+    CLog b1 == CLog b2 = toLazyByteString b1 == toLazyByteString b2
     CTruncateLog i1 == CTruncateLog i2 = i1 == i2
     CLogEntries es1 == CLogEntries es2 = es1 == es2
     _ == _ = False
