@@ -105,7 +105,7 @@ prop_handle cfg s event =
 
 -- | 1 minute
 timeoutMicros :: Int
-timeoutMicros = fromInteger $ ((10::Integer) ^ (6::Integer)) * 60
+timeoutMicros = 60 * 1000000
 
 -- | Runs `leaderElectionFromCold' property.
 prop_leaderElectionFromCold :: Property
