@@ -10,6 +10,8 @@ module Data.Kontiki.MemLog (
     , IntMap.insert
     ) where
 
+import Control.Applicative
+
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
@@ -21,6 +23,7 @@ type Log a = IntMap (Entry a)
 
 newtype MemLog a r = MemLog { unMemLog :: Reader (Log a) r }
   deriving ( Functor
+           , Applicative
            , Monad
            , MonadReader (Log a)
            )
