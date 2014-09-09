@@ -207,7 +207,7 @@ stepUp term commitIndex = do
                               , aePrevLogIndex = lastIndex
                               , aePrevLogTerm = lastTerm
                               , aeEntries = []
-                              , aeCommitIndex = index0
+                              , aeCommitIndex = commitIndex
                               }
 
     nodes <- view configNodes
