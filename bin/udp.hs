@@ -33,6 +33,8 @@ import qualified Data.Binary as B
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import qualified Data.Conduit.Network.UDP as CNU
+import qualified Data.Streaming.Network as SN
+import qualified Data.Streaming.Network.Internal as SNI
 
 import Network.Kontiki.Raft
     ( Command(..), Config(..), Entry(..), Event(..),
@@ -181,7 +183,7 @@ run config' s ps = do
 
 makeChannel :: NodeId -> String -> Int -> IO (RollingQueue (Message Value))
 makeChannel nn h p = do
-    (sock, _) <- CNU.getSocket h p
+    (sock, _) <- SN.getSocketUDP h p
     q <- RollingQueue.newIO queueSize
     addr <- inet_addr h
     let r = SockAddrInet (toEnum p) addr
@@ -212,7 +214,7 @@ main = do
     ps <- newPlumbingState (Map.fromList chans)
 
     let (_, p) = (Map.!) nodes self
-    sock <- CNU.bindPort (toEnum p) CNU.HostIPv4
+    sock <- SN.bindPortUDP (toEnum p) SNI.HostIPv4
     void $ forkIO $ do
         CNU.sourceSocket sock 4096 $=  CL.map (B.decode . LBS.fromStrict . CNU.msgData)
                                    =$= CL.map (uncurry EMessage)
