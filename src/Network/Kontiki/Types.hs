@@ -56,8 +56,6 @@ module Network.Kontiki.Types (
     , AppendEntriesResponse(..)
     ) where
 
-import Control.Applicative
-
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -240,9 +238,9 @@ data Mode = MFollower
   deriving (Show, Eq)
 
 -- * Utility type aliases for all running `Mode's.
-type Follower = State MFollower
-type Candidate = State MCandidate
-type Leader = State MLeader
+type Follower = State 'MFollower
+type Candidate = State 'MCandidate
+type Leader = State 'MLeader
 
 -- | State of a node.
 data State (s :: Mode) where

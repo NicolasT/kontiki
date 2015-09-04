@@ -28,44 +28,47 @@ Library
                      , Network.Kontiki.Raft.Candidate
                      , Network.Kontiki.Raft.Leader
                      , Network.Kontiki.Raft.Utils
-  Build-Depends:       base >= 4 && < 5
-                     , mtl
-                     , bytestring >= 0.10
-                     , containers
-                     , binary >= 0.6.3
-                     , lens
-                     , QuickCheck
+  Build-Depends:       base >= 4.8 && < 4.9
+                     , mtl >= 2.2 && < 2.3
+                     , bytestring >= 0.10 && < 0.11
+                     , containers >= 0.5 && < 0.6
+                     , binary >= 0.7 && < 0.8
+                     , lens >= 4.12 && < 4.13
+                     , QuickCheck >= 2.8 && < 2.9
   Hs-Source-Dirs:      src
   Ghc-Options:         -Wall -fwarn-incomplete-patterns
 
 Executable kontiki-demo
   Main-Is:             demo.hs
-  Build-Depends:       base >= 4 && < 5
+  Build-Depends:       base
                      , mtl
-                     , stm
-                     , random
+                     , stm >= 2.4 && < 2.5
+                     , random >= 1.1 && < 1.2
                      , bytestring
                      , containers
-                     , hslogger
+                     , hslogger >= 1.2 && < 1.3
                      , kontiki
   Hs-Source-Dirs:      bin
   Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
 
 Executable kontiki-udp
   Main-Is:             udp.hs
-  Build-Depends:       base >= 4 && < 5
+  Other-Modules:       Control.STM.Timer
+                     , Data.Conduit.RollingQueue
+                     , Data.Kontiki.MemLog
+  Build-Depends:       base
                      , mtl
-                     , transformers
+                     , transformers > 0.4 && < 0.5
                      , bytestring
-                     , stm
+                     , stm >= 2.4 && < 2.5
                      , containers
-                     , random
-                     , network
+                     , random >= 1.1 && < 1.2
+                     , network >= 2.6 && < 2.7
                      , binary
-                     , conduit
-                     , conduit-extra
-                     , streaming-commons
-                     , rolling-queue
+                     , conduit >= 1.2 && < 1.3
+                     , conduit-extra >= 1.1 && < 1.2
+                     , streaming-commons >= 0.1 && < 0.2
+                     , rolling-queue >= 0.1 && < 0.2
                      , lens
                      , kontiki
   Hs-Source-Dirs:      bin
@@ -74,12 +77,11 @@ Executable kontiki-udp
 Test-Suite kontiki-test
   Type:                exitcode-stdio-1.0
   Main-Is:             test.hs
-  Build-Depends:       base >= 4 && < 5
+  Build-Depends:       base
                      , mtl
                      , binary
-                     , test-framework
-                     , test-framework-quickcheck2
+                     , test-framework >= 0.8 && < 0.9
+                     , test-framework-quickcheck2 >= 0.3 && < 0.4
                      , kontiki
   Hs-Source-Dirs:      bin
   Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
-  Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded -fhpc -hpcdir dist/hpc

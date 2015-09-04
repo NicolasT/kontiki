@@ -44,6 +44,7 @@ prop_serialization a = decode (encode a) == a
 -- A stub MonadLog which, well... has no log at all
 newtype Stub a = Stub { unStub :: Identity a }
   deriving ( Functor
+           , Applicative
            , Monad
            )
 

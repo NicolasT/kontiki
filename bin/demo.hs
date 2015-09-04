@@ -5,8 +5,6 @@
 
 module Main (main) where
 
-import Control.Applicative
-
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 

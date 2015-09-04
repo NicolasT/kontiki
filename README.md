@@ -1,59 +1,25 @@
-kontiki
+Kontiki
 =======
-
-An implementation of the Raft consensus protocol. Please check 
+An implementation of the Raft consensus protocol. See the
 [original paper](https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pdf)
-for details of the protocol
+for details about the protocol.
 
 [![Build Status](https://travis-ci.org/NicolasT/kontiki.png?branch=master)](https://travis-ci.org/NicolasT/kontiki)
 
 Hacking
 -------
+This project is developed using [stack](https://github.com/commercialhaskell/stack), based on an LTS snapshot of [Stackage](http://www.stackage.org). See the `stack.yaml` file for more details.
 
-This project is built using [cabal](http://www.haskell.org/cabal/). It is recommended
-that you use *cabal >= 1.18* as it introduces an excellent sandboxing capability
-which deprecates [cabal-dev](http://hackage.haskell.org/package/cabal-dev).
+Plain `cabal` can be used as well.
 
 ### Building
+Simply run `stack build --pedantic`.
 
-If you use the *cabal sandboxes* first run:
-``` bash
-$ cabal sandbox init
-```
-
-This will initialize an empty sandbox under *.cabal-sandbox*. From this point forward,
-all dependencies will be installed locally into the sandbox and will not affect your
-globally installed packages.
-
-First install all the required dependencies:
-``` bash
-$ cabal install --only-dependencies --enable-tests --enable-benchmarks --enable-library-coverage
-```
-
-Then you'll need to run the __configure__ command:
-``` bash
-$ cabal configure --enable-tests --enable-benchmarks --enable-library-coverage
-```
-
-After that you should be able to build and run the tests:
-
-``` bash
-$ cabal build && cabal test
-``` 
-
-### Code coverage
-
-Running __cabal test__ with __--enable-library-coverage__ should write
-the test coverage report under __dist/hpc__.
+### Tests
+Run `stack build --test` to run the test-suite.
 
 ### Haddock
-
-Simply run:
-``` bash
-$ cabal haddock
-```
-
-This should generate the documentation under __dist/doc__.
+Run `stack build --haddock` to build the Haddock-rendered API documentation.
 
 ### Available demos
 
@@ -65,12 +31,12 @@ This is a demo of an in-memory __kontiki__ cluster running with the use
 of [conduit](http://hackage.haskell.org/package/conduit). You can run up to 3 nodes
 and you will be able to see the logs output by them.
 
-Simply run the following in separate terminals (once you have built the udp demo executable):
+Simply run the following in separate terminals
 ``` bash
-$ kontiki-udp <nodeid>
+$ stack exec kontiki-udp <nodeid>
 ```
 
-Where *nodeid = ["node0", "node1", "node2", "node3"]*. You should be able to follow 
+where *nodeid = ["node0", "node1", "node2"]*. You should be able to follow 
 the logs output by each instance.
 
 Example output:

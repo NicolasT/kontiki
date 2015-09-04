@@ -19,7 +19,6 @@ module Network.Kontiki.Monad where
 
 import Prelude hiding (log)
 
-import Control.Applicative
 import Control.Monad.RWS
 
 import Data.ByteString (ByteString)

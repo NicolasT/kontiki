@@ -1,0 +1,7 @@
+packages:
+ - .
+
+resolver: lts-3.4
+
+extra-deps:
+ - rolling-queue-0.1
