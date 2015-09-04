@@ -1,13 +1,1 @@
-dist
-cabal-dev
-*.o
-*.hi
-*.chi
-*.chs.h
-.virthualenv
-.dist-buildwrapper
-.project
-.settings
-.cabal-sandbox
-cabal.sandbox.config
-TAGS
+.stack-work/
