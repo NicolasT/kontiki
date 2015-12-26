@@ -76,12 +76,13 @@ Executable kontiki-udp
 
 Test-Suite kontiki-test
   Type:                exitcode-stdio-1.0
-  Main-Is:             test.hs
+  Main-Is:             kontiki-test.hs
   Build-Depends:       base
                      , mtl
                      , binary
                      , test-framework >= 0.8 && < 0.9
                      , test-framework-quickcheck2 >= 0.3 && < 0.4
+                     , tasty, tasty-hspec, hspec, QuickCheck
                      , kontiki
-  Hs-Source-Dirs:      bin
+  Hs-Source-Dirs:      test
   Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
