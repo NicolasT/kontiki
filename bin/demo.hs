@@ -1,37 +1,14 @@
-{-# LANGUAGE OverloadedStrings,
-             GeneralizedNewtypeDeriving,
-             FlexibleInstances,
-             MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Main (main) where
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-
-import qualified Data.Set as Set
-
-import Control.Monad.Reader
-
-import Network.Kontiki.Raft
-
-type Log a = IntMap (Entry a)
-newtype MemLog a r = MemLog { unMemLog :: Reader (Log a) r }
-  deriving ( Functor
-           , Applicative
-           , Monad
-           , MonadReader (Log a)
-           )
-
-instance MonadLog (MemLog a) a where
-    logEntry i = IntMap.lookup (fromIntegral $ unIndex i) `fmap` ask
-    logLastEntry = do
-        l <- ask
-        return $ if IntMap.null l
-                    then Nothing
-                    else Just $ snd $ IntMap.findMax l
-
-runMemLog :: MemLog a r -> Log a -> r
-runMemLog = runReader . unMemLog
+import qualified Data.IntMap          as IntMap
+import           Data.Kontiki.MemLog
+import qualified Data.Set             as Set
+import           Network.Kontiki.Raft
 
 type Value = String
 

@@ -21,6 +21,7 @@ Source-Repository head
 
 Library
   Exposed-Modules:     Network.Kontiki.Raft
+                     , Data.Kontiki.MemLog
   Other-Modules:       Network.Kontiki.Types
                      , Network.Kontiki.Log
                      , Network.Kontiki.Monad
@@ -55,7 +56,6 @@ Executable kontiki-udp
   Main-Is:             udp.hs
   Other-Modules:       Control.STM.Timer
                      , Data.Conduit.RollingQueue
-                     , Data.Kontiki.MemLog
   Build-Depends:       base
                      , mtl
                      , transformers > 0.4 && < 0.5

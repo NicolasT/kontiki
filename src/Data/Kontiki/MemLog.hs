@@ -1,6 +1,6 @@
-{-# LANGUAGE FlexibleInstances,
-             MultiParamTypeClasses,
-             GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 
 module Data.Kontiki.MemLog (
       Log
@@ -10,12 +10,12 @@ module Data.Kontiki.MemLog (
     , IntMap.insert
     ) where
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import           Data.IntMap          (IntMap)
+import qualified Data.IntMap          as IntMap
 
-import Control.Monad.Reader (MonadReader, Reader, ask, runReader)
+import           Control.Monad.Reader (MonadReader, Reader, ask, runReader)
 
-import Network.Kontiki.Raft (Entry, MonadLog(..), unIndex)
+import           Network.Kontiki.Raft (Entry, MonadLog (..), unIndex)
 
 type Log a = IntMap (Entry a)
 
