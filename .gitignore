@@ -52,3 +52,4 @@ ui/.lein-failures
 .node.out
 .node.pid
 .stack-work
+*.tix
