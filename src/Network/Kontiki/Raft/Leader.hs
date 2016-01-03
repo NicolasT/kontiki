@@ -109,7 +109,10 @@ quorumIndex = do
 -- | Handles `ElectionTimeout'.
 handleElectionTimeout :: (Functor m, Monad m)
                       => TimeoutHandler ElectionTimeout a Leader m
-handleElectionTimeout = currentState
+handleElectionTimeout =  do
+  resetElectionTimeout
+  logS "Ignoring election timeout in Leader state"
+  currentState
 
 -- | Handles `HeartbeatTimeout'.
 handleHeartbeatTimeout :: (Functor m, Monad m, MonadLog m a)
