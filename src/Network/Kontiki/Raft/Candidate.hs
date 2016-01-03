@@ -126,6 +126,7 @@ handleElectionTimeout = do
 handleHeartbeatTimeout :: (Functor m, Monad m)
                        => TimeoutHandler HeartbeatTimeout a Candidate m
 handleHeartbeatTimeout = do
+    resetHeartbeatTimeout
     logS "Ignoring heartbeat timeout in Candidate state"
     currentState
 
