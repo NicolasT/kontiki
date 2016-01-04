@@ -138,6 +138,8 @@ handleAppendEntries sender AppendEntries{..} = do
                        fCommitIndex .= aeCommitIndex
                        setCommitIndex aeCommitIndex
 
+                   fLastKnownLeader .= Just aeLeaderId
+                   
                    send sender $ AppendEntriesResponse { aerTerm = aeTerm
                                                        , aerSuccess = True
                                                        , aerLastIndex = lastIndex'

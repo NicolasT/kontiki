@@ -57,6 +57,7 @@ initialState :: SomeState
 initialState = wrap FollowerState { _fCurrentTerm = term0
                                   , _fCommitIndex = index0
                                   , _fVotedFor = Nothing
+                                  , _fLastKnownLeader = Nothing
                                   }
 
 -- | Restores the node to initial (`Follower') mode
@@ -79,6 +80,7 @@ restore cfg s = case s of
     toFollower t i = wrap FollowerState { _fCurrentTerm = t
                                         , _fCommitIndex = i
                                         , _fVotedFor = Just nodeId
+                                        , _fLastKnownLeader = Nothing
                                         }
     nodeId = cfg ^. configNodeId
     et = cfg ^. configElectionTimeout

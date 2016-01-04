@@ -19,28 +19,28 @@
 --
 -- Types that are commonly used through-out kontiki. Some of the most
 -- important types are defined here, like `Index', `Term', states
--- for different modes, as well as events & commands 
--- (see `"Network.Kontiki.Types#events_commands"') and messages 
+-- for different modes, as well as events & commands
+-- (see `"Network.Kontiki.Types#events_commands"') and messages
 -- (see `"Network.Kontiki.Types#messages"').
 -----------------------------------------------------------------------------
 module Network.Kontiki.Types (
-    
+
     -- * General types
       NodeId, NodeSet
     , Index(unIndex), index0, succIndex, prevIndex
     , Term, term0, succTerm
     , Entry(..)
     , Config(..), configNodeId, configNodes, configElectionTimeout, configHeartbeatTimeout
-    
+
     -- * Node states
-    , FollowerState(..), fCurrentTerm, fCommitIndex, fVotedFor
+    , FollowerState(..), fCurrentTerm, fCommitIndex, fVotedFor, fLastKnownLeader
     , CandidateState(..), cCurrentTerm, cCommitIndex, cVotes
     , LeaderState(..), lCurrentTerm, lCommitIndex, lNextIndex, lLastIndex
     , Mode(..), mode
     , Follower, Candidate, Leader
     , State(..), SomeState(..), InternalState
     , Wrapable(wrap)
-    
+
     -- * Events and Commands
     , Event(..)
     , ElectionTimeout
@@ -186,9 +186,10 @@ arbitraryBS = BS8.pack `fmap` listOf1 arbitrary
 -----------------------------------------------------------------------------
 
 -- | State kept when in `Follower' mode.
-data FollowerState = FollowerState { _fCurrentTerm :: Term
-                                   , _fCommitIndex :: Index
-                                   , _fVotedFor    :: Maybe NodeId
+data FollowerState = FollowerState { _fCurrentTerm     :: Term
+                                   , _fCommitIndex     :: Index
+                                   , _fVotedFor        :: Maybe NodeId
+                                   , _fLastKnownLeader :: Maybe NodeId
                                    }
   deriving (Show, Eq, Generic)
 makeLenses ''FollowerState
@@ -198,7 +199,8 @@ instance Binary FollowerState
 instance Arbitrary FollowerState where
     arbitrary = do
         n <- arbitraryBS
-        FollowerState <$> arbitrary <*> arbitrary <*> elements [Nothing, Just n]
+        m <- arbitraryBS
+        FollowerState <$> arbitrary <*> arbitrary <*> elements [Nothing, Just n] <*> elements [Nothing, Just m]
 
 -- | State kept when in `Candidate' mode.
 data CandidateState = CandidateState { _cCurrentTerm :: Term

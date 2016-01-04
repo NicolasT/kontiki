@@ -97,4 +97,5 @@ stepDown sender term commitIndex = do
     return $ wrap FollowerState { _fCurrentTerm = term
                                 , _fCommitIndex = commitIndex
                                 , _fVotedFor = Just sender
+                                , _fLastKnownLeader = Nothing
                                 }
