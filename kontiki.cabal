@@ -29,13 +29,13 @@ Library
                      , Network.Kontiki.Raft.Candidate
                      , Network.Kontiki.Raft.Leader
                      , Network.Kontiki.Raft.Utils
-  Build-Depends:       base >= 4.8 && < 4.9
-                     , mtl >= 2.2 && < 2.3
-                     , bytestring >= 0.10 && < 0.11
-                     , containers >= 0.5 && < 0.6
-                     , binary >= 0.7 && < 0.8
-                     , lens >= 4.12 && < 4.13
-                     , QuickCheck >= 2.8 && < 2.9
+  Build-Depends:       base
+                     , mtl
+                     , bytestring
+                     , containers
+                     , binary
+                     , lens 
+                     , QuickCheck 
   Hs-Source-Dirs:      src
   Ghc-Options:         -Wall -fwarn-incomplete-patterns
 
@@ -43,11 +43,11 @@ Executable kontiki-demo
   Main-Is:             demo.hs
   Build-Depends:       base
                      , mtl
-                     , stm >= 2.4 && < 2.5
-                     , random >= 1.1 && < 1.2
+                     , stm 
+                     , random 
                      , bytestring
                      , containers
-                     , hslogger >= 1.2 && < 1.3
+                     , hslogger
                      , kontiki
   Hs-Source-Dirs:      bin
   Ghc-Options:         -Wall -fwarn-incomplete-patterns -rtsopts -threaded
@@ -58,17 +58,17 @@ Executable kontiki-udp
                      , Data.Conduit.RollingQueue
   Build-Depends:       base
                      , mtl
-                     , transformers > 0.4 && < 0.5
+                     , transformers
                      , bytestring
-                     , stm >= 2.4 && < 2.5
+                     , stm
                      , containers
-                     , random >= 1.1 && < 1.2
-                     , network >= 2.6 && < 2.7
+                     , random
+                     , network
                      , binary
-                     , conduit >= 1.2 && < 1.3
-                     , conduit-extra >= 1.1 && < 1.2
-                     , streaming-commons >= 0.1 && < 0.2
-                     , rolling-queue >= 0.1 && < 0.2
+                     , conduit
+                     , conduit-extra
+                     , streaming-commons
+                     , rolling-queue
                      , lens
                      , kontiki
   Hs-Source-Dirs:      bin
@@ -80,8 +80,8 @@ Test-Suite kontiki-test
   Build-Depends:       base
                      , mtl
                      , binary
-                     , test-framework >= 0.8 && < 0.9
-                     , test-framework-quickcheck2 >= 0.3 && < 0.4
+                     , test-framework
+                     , test-framework-quickcheck2
                      , tasty, tasty-hspec, hspec, QuickCheck
                      , kontiki
   Hs-Source-Dirs:      test
