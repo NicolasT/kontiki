@@ -38,7 +38,7 @@ import qualified Network.Kontiki.Raft.Leader as Leader
 -- and `state' of the node, runs the Raft protocol and  
 -- returns the new state of the node and a list of commands that 
 -- should be executed by the driver.
-handle :: (Functor m, Monad m, MonadLog m a) 
+handle :: (Monad m, MonadLog m a) 
        => Config                        -- ^ configuration of the cluster 
        -> SomeState                     -- ^ current state of the node
        -> Event a                       -- ^ incoming event

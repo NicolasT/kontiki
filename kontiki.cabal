@@ -34,8 +34,8 @@ Library
                      , bytestring
                      , containers
                      , binary
-                     , lens 
-                     , QuickCheck 
+                     , lens
+                     , QuickCheck
   Hs-Source-Dirs:      src
   Ghc-Options:         -Wall -fwarn-incomplete-patterns
 
@@ -43,8 +43,8 @@ Executable kontiki-demo
   Main-Is:             demo.hs
   Build-Depends:       base
                      , mtl
-                     , stm 
-                     , random 
+                     , stm
+                     , random
                      , bytestring
                      , containers
                      , hslogger

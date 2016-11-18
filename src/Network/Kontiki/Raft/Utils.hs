@@ -1,7 +1,4 @@
-{-# LANGUAGE TypeFamilies,
-             ScopedTypeVariables,
-             FlexibleContexts,
-             OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, OverloadedStrings, ScopedTypeVariables, TypeFamilies #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.Kontiki.Raft.Util
@@ -15,19 +12,19 @@
 -----------------------------------------------------------------------------
 module Network.Kontiki.Raft.Utils where
 
-import qualified Data.Set as Set
+import qualified Data.Set                  as Set
 
-import Data.ByteString.Char8 ()
+import           Data.ByteString.Char8     ()
 
-import Control.Monad.State.Class (get)
+import           Control.Monad.State.Class (get)
 
-import Control.Lens (view)
+import           Control.Lens              (view)
 
-import Network.Kontiki.Types
-import Network.Kontiki.Monad
+import           Network.Kontiki.Monad
+import           Network.Kontiki.Types
 
 -- | Gets the current state.
-currentState :: (Functor m, Monad m, Wrapable t) => TransitionT a t m SomeState
+currentState :: ( Monad m, Wrapable t) => TransitionT a t m SomeState
 currentState = wrap `fmap` get
 
 -- TODO Not sure why these *' variants are required... Trickyness with
@@ -55,9 +52,9 @@ handleGeneric
     handleHeartbeatTimeout
     event = case event of
     EMessage s m -> case m of
-        MRequestVote m' -> handleRequestVote s m'
-        MRequestVoteResponse m' -> handleRequestVoteResponse s m'
-        MAppendEntries m' -> handleAppendEntries s m'
+        MRequestVote m'           -> handleRequestVote s m'
+        MRequestVoteResponse m'   -> handleRequestVoteResponse s m'
+        MAppendEntries m'         -> handleAppendEntries s m'
         MAppendEntriesResponse m' -> handleAppendEntriesResponse s m'
     EElectionTimeout -> handleElectionTimeout
     EHeartbeatTimeout -> handleHeartbeatTimeout
@@ -65,7 +62,7 @@ handleGeneric
 -- | Calculates the size of the cluster quorum, defined as:
 -- @
 --    (size_of_cluster `div` 2) + 1
--- @ 
+-- @
 quorumSize :: Monad m => TransitionT a s m Int
 quorumSize = do
     nodes <- view configNodes
@@ -82,7 +79,7 @@ isMajority votes = do
 -- | Steps down to `MFollower' mode by resetting the election timeout,
 -- sending a `RequestVoteResponse' to `sender' and transitioning to
 -- `MFollower' mode.
---  
+--
 -- Can't have this in Follower due to recursive imports, bummer
 stepDown :: Monad m => NodeId -> Term -> Index -> TransitionT a f m SomeState
 stepDown sender term commitIndex = do

@@ -30,7 +30,7 @@ import qualified Network.Kontiki.Raft.Candidate as Candidate
 import qualified Network.Kontiki.Raft.Leader as Leader
 
 -- | Handles `RequestVote'.
-handleRequestVote :: (Functor m, Monad m, MonadLog m a)
+handleRequestVote :: (Monad m, MonadLog m a)
                   => MessageHandler RequestVote a Follower m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use fCurrentTerm
@@ -85,7 +85,7 @@ handleRequestVote sender RequestVote{..} = do
                currentState
 
 -- | Handles `RequestVoteResponse'.
-handleRequestVoteResponse :: (Functor m, Monad m)
+handleRequestVoteResponse :: (Monad m)
                           => MessageHandler RequestVoteResponse a Follower m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use fCurrentTerm
@@ -96,7 +96,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
         else currentState
 
 -- | Handles `AppendEntries'.
-handleAppendEntries :: (Functor m, Monad m, MonadLog m a)
+handleAppendEntries :: (Monad m, MonadLog m a)
                     => MessageHandler (AppendEntries a) a Follower m
 handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use fCurrentTerm
@@ -171,14 +171,14 @@ dropWhileM p = loop
                 else return (x : xs)
 
 -- | Handles `AppendEntriesResponse'.
-handleAppendEntriesResponse :: (Functor m, Monad m)
+handleAppendEntriesResponse :: (Monad m)
                             => MessageHandler AppendEntriesResponse a Follower m
 handleAppendEntriesResponse _ _ = do
     logS "Received AppendEntriesResponse message in Follower state, ignoring"
     currentState
 
 -- | Handle `ElectionTimeout'.
-handleElectionTimeout :: (Functor m, Monad m, MonadLog m a)
+handleElectionTimeout :: (Monad m, MonadLog m a)
                       => TimeoutHandler ElectionTimeout a Follower m
 handleElectionTimeout = do
     logS "Election timeout, stepping up"
@@ -196,7 +196,7 @@ handleElectionTimeout = do
         else Candidate.stepUp nextTerm commitIndex
 
 -- | Handles `HeartbeatTimeout'.
-handleHeartbeatTimeout :: (Functor m, Monad m)
+handleHeartbeatTimeout :: (Monad m)
                        => TimeoutHandler HeartbeatTimeout a Follower m
 handleHeartbeatTimeout = do
     resetHeartbeatTimeout
@@ -204,7 +204,7 @@ handleHeartbeatTimeout = do
     currentState
 
 -- | `Handler' for `MFollower' mode.
-handle :: (Functor m, Monad m, MonadLog m a) => Handler a Follower m
+handle :: (Monad m, MonadLog m a) => Handler a Follower m
 handle = handleGeneric
             handleRequestVote
             handleRequestVoteResponse
