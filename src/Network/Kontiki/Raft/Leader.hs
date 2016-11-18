@@ -33,7 +33,7 @@ import Network.Kontiki.Raft.Utils
 
 
 -- | Handles `RequestVote'.
-handleRequestVote :: (Functor m, Monad m)
+handleRequestVote :: (Monad m)
                   => MessageHandler RequestVote a Leader m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use lCurrentTerm
@@ -49,7 +49,7 @@ handleRequestVote sender RequestVote{..} = do
             currentState
 
 -- | Handle `RequestVoteResponse'.
-handleRequestVoteResponse :: (Functor m, Monad m)
+handleRequestVoteResponse :: (Monad m)
                           => MessageHandler RequestVoteResponse a Leader m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use lCurrentTerm
@@ -60,7 +60,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
         else currentState
 
 -- | Handles `AppendEntries'.
-handleAppendEntries :: (Functor m, Monad m)
+handleAppendEntries :: (Monad m)
                     => MessageHandler (AppendEntries a) a Leader m
 handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use lCurrentTerm
@@ -71,7 +71,7 @@ handleAppendEntries sender AppendEntries{..} = do
         else currentState
 
 -- | Handles `AppendEntriesResponse'.
-handleAppendEntriesResponse :: (Functor m, Monad m)
+handleAppendEntriesResponse :: (Monad m)
                             => MessageHandler AppendEntriesResponse a Leader m
 handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
     currentTerm <- use lCurrentTerm
@@ -98,7 +98,7 @@ handleAppendEntriesResponse sender AppendEntriesResponse{..} = do
            currentState
 
 -- | Calculates current quorum `Index' from nodes' latest indices
-quorumIndex :: (Functor m, Monad m)
+quorumIndex :: (Monad m)
             => TransitionT a LeaderState m Index
 quorumIndex = do
     lastIndices <- Map.elems `fmap` use lLastIndex
@@ -107,7 +107,7 @@ quorumIndex = do
     return $ sorted !! (quorum - 1)
 
 -- | Handles `ElectionTimeout'.
-handleElectionTimeout :: (Functor m, Monad m)
+handleElectionTimeout :: (Monad m)
                       => TimeoutHandler ElectionTimeout a Leader m
 handleElectionTimeout =  do
   resetElectionTimeout
@@ -115,7 +115,7 @@ handleElectionTimeout =  do
   currentState
 
 -- | Handles `HeartbeatTimeout'.
-handleHeartbeatTimeout :: (Functor m, Monad m, MonadLog m a)
+handleHeartbeatTimeout :: (Monad m, MonadLog m a)
                        => TimeoutHandler HeartbeatTimeout a Leader m
 handleHeartbeatTimeout = do
     resetHeartbeatTimeout
@@ -178,7 +178,7 @@ sendAppendEntries lastEntry commitIndex node = do
                                     }
 
 -- | `Handler' for `MLeader' mode.
-handle :: (Functor m, Monad m, MonadLog m a)
+handle :: (Monad m, MonadLog m a)
        => Handler a Leader m
 handle = handleGeneric
             handleRequestVote
@@ -190,7 +190,7 @@ handle = handleGeneric
 
 -- | Transitions into `MLeader' mode by broadcasting heartbeat `AppendEntries'
 -- to all nodes and changing state to `LeaderState'. 
-stepUp :: (Functor m, Monad m, MonadLog m a)
+stepUp :: (Monad m, MonadLog m a)
        => Term    -- ^ `Term' of the `Leader'
        -> Index   -- ^ commit `Index'
        -> TransitionT a f m SomeState

@@ -27,7 +27,7 @@ import Network.Kontiki.Raft.Utils
 import qualified Network.Kontiki.Raft.Leader as Leader
 
 -- | Handles `RequestVote'.
-handleRequestVote :: (Functor m, Monad m) => MessageHandler RequestVote a Candidate m
+handleRequestVote :: (Monad m) => MessageHandler RequestVote a Candidate m
 handleRequestVote sender RequestVote{..} = do
     currentTerm <- use cCurrentTerm
     commitIndex <- use cCommitIndex
@@ -42,7 +42,7 @@ handleRequestVote sender RequestVote{..} = do
             currentState
 
 -- | Handles `RequestVoteResponse'.
-handleRequestVoteResponse :: (Functor m, Monad m, MonadLog m a)
+handleRequestVoteResponse :: (Monad m, MonadLog m a)
                           => MessageHandler RequestVoteResponse a Candidate m
 handleRequestVoteResponse sender RequestVoteResponse{..} = do
     currentTerm <- use cCurrentTerm
@@ -74,7 +74,7 @@ handleRequestVoteResponse sender RequestVoteResponse{..} = do
                    Leader.stepUp currentTerm commitIndex
 
 -- | Handles `AppendEntries'.
-handleAppendEntries :: (Functor m, Monad m)
+handleAppendEntries :: (Monad m)
                     => MessageHandler (AppendEntries a) a Candidate m
 handleAppendEntries sender AppendEntries{..} = do
     currentTerm <- use cCurrentTerm
@@ -89,14 +89,14 @@ handleAppendEntries sender AppendEntries{..} = do
             currentState
 
 -- | Handles `AppendEntriesResponse'.
-handleAppendEntriesResponse :: (Functor m, Monad m)
+handleAppendEntriesResponse :: (Monad m)
                             => MessageHandler AppendEntriesResponse a Candidate m
 handleAppendEntriesResponse _ _ = do
     logS "Ignoring AppendEntriesResponse message in Candidate mode"
     currentState
 
 -- | Handles `ElectionTimeout'.
-handleElectionTimeout :: (Functor m, Monad m, MonadLog m a)
+handleElectionTimeout :: (Monad m, MonadLog m a)
                       => TimeoutHandler ElectionTimeout a Candidate m
 handleElectionTimeout = do
     logS "Election timeout in Candidate state"
@@ -123,7 +123,7 @@ handleElectionTimeout = do
                                  }
 
 -- | Handles `HeartbeatTimeout'.
-handleHeartbeatTimeout :: (Functor m, Monad m)
+handleHeartbeatTimeout :: (Monad m)
                        => TimeoutHandler HeartbeatTimeout a Candidate m
 handleHeartbeatTimeout = do
     resetHeartbeatTimeout
@@ -131,7 +131,7 @@ handleHeartbeatTimeout = do
     currentState
 
 -- | `Handler' for `MCandidate' mode.
-handle :: (Functor m, Monad m, MonadLog m a)
+handle :: (Monad m, MonadLog m a)
        => Handler a Candidate m
 handle = handleGeneric
             handleRequestVote
@@ -143,7 +143,7 @@ handle = handleGeneric
 
 -- | Transitions into `MCandidate' mode with this `term'
 -- and resets the election timer. 
-stepUp :: (Functor m, Monad m, MonadLog m a)
+stepUp :: (Monad m, MonadLog m a)
        => Term
        -> Index
        -> TransitionT a s m SomeState
