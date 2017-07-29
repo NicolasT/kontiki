@@ -1,0 +1,38 @@
+Name:          kontiki-raft-classes
+Version:       0.0.0.0
+Synopsis:      An implementation of the Raft consensus protocol - Classes
+Description:
+  This package is part of Kontiki, an implementation of the Raft consensus
+  protocol.
+  .
+  It contains abstract definitions of messages, state and actions used by the
+  protocol implementation code. Appropriate implementations should be provided
+  by any application using the library.
+Category:      Kontiki
+Stability:     alpha
+
+Author:        Nicolas Trangez
+Maintainer:    ikke@nicolast.be
+Copyright:     Copyright (C) 2017 Nicolas Trangez
+License:       Apache
+License-File:  LICENSE
+Homepage:      https://github.com/NicolasT/kontiki/tree/master/kontiki-raft-classes#readme
+Bug-Reports:   https://github.com/NicolasT/kontiki/labels/kontiki-raft-classes
+
+Cabal-Version: >= 1.8
+Build-Type:    Simple
+
+Extra-Source-Files:
+  README.md
+
+Source-Repository head
+  Type:     git
+  Location: https://github.com/NicolasT/kontiki.git
+  Subdir:   kontiki-raft-classes
+
+Library
+  Build-Depends:   base >= 4.9 && < 4.10
+  Exposed-Modules: Kontiki.Raft.Classes.RPC.RequestVoteRequest
+  Other-Modules:   Kontiki.Raft.Classes.Lens
+  Hs-Source-Dirs:  src
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
