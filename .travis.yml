@@ -1,0 +1,22 @@
+language: c
+sudo: false
+dist: trusty
+
+cache:
+  directories:
+  - $HOME/.stack
+  - .stack-work/
+
+before_install:
+- mkdir -p $HOME/.local/bin
+- export PATH=$HOME/.local/bin:$PATH
+- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C $HOME/.local/bin '*/stack'
+- chmod a+x $HOME/.local/bin/stack
+
+install:
+- travis_wait stack -j 2 --no-terminal setup
+- travis_wait stack -j 2 --no-terminal build --test --haddock --only-snapshot
+
+script:
+- stack -j 2 --no-terminal build --test --haddock --pedantic
+- stack -j 2 --no-terminal sdist
