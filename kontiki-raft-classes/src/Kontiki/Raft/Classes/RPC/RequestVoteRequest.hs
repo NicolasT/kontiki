@@ -15,17 +15,15 @@ module Kontiki.Raft.Classes.RPC.RequestVoteRequest (
     ) where
 
 import Kontiki.Raft.Classes.Lens (Lens')
+import Kontiki.Raft.Classes.RPC (HasTerm(Term))
 
 -- | RequestVote RPC request message
 --
 -- Invoked by candidates to gather votes.
-class RequestVoteRequest msg where
-    type Term msg
+class HasTerm msg => RequestVoteRequest msg where
     type Node msg
     type Index msg
 
-    -- | Candidate's term
-    term :: Lens' msg (Term msg)
     -- | Candidate requesting vote
     candidateId :: Lens' msg (Node msg)
     -- | Index of candidate's last log entry

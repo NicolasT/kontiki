@@ -1,0 +1,47 @@
+Name:          kontiki-raft
+Version:       0.0.0.0
+Synopsis:      An implementation of the Raft consensus protocol - Protocol
+Description:
+  This package is part of Kontiki, an implementation of the Raft consensus
+  protocol.
+  .
+  It contains implementations of the Raft protocol, i.e. the behaviors of
+  various node within a cluster in response to events.
+Category:      Kontiki
+Stability:     alpha
+
+Author:        Nicolas Trangez
+Maintainer:    ikke@nicolast.be
+Copyright:     Copyright (C) 2017 Nicolas Trangez
+License:       Apache
+License-File:  LICENSE
+Homepage:      https://github.com/NicolasT/kontiki/tree/master/kontiki-raft#readme
+Bug-Reports:   https://github.com/NicolasT/kontiki/labels/kontiki-raft
+
+Cabal-Version: >= 1.8
+Build-Type:    Simple
+
+Extra-Source-Files:
+  README.md
+
+Source-Repository head
+  Type:     git
+  Location: https://github.com/NicolasT/kontiki.git
+  Subdir:   kontiki-raft
+
+Library
+  Build-Depends:   base >= 4.9 && < 4.10
+                 , data-default-class >= 0.1 && < 0.2
+                 , indexed >= 0.1 && < 0.2
+                 , indexed-extras >= 0.2 && < 0.3
+                 , lens >= 4.15 && < 4.16
+                 , mtl >= 2.2 && < 2.3
+                 , kontiki-raft-classes
+  Exposed-Modules: Kontiki.Raft
+  Other-Modules:   Kontiki.Raft.State
+                 --  Kontiki.Raft.AllServers
+                 , Kontiki.Raft.Candidate
+                 , Kontiki.Raft.Follower
+                 , Kontiki.Raft.Leader
+  Hs-Source-Dirs:  src
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists

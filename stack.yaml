@@ -2,3 +2,9 @@ resolver: lts-9.0
 
 packages:
 - './kontiki-raft-classes'
+- './kontiki-raft-types'
+- './kontiki-raft'
+- './indexed-extras'
+
+extra-deps:
+- indexed-0.1.3

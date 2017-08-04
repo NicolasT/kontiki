@@ -32,7 +32,16 @@ Source-Repository head
 
 Library
   Build-Depends:   base >= 4.9 && < 4.10
-  Exposed-Modules: Kontiki.Raft.Classes.RPC.RequestVoteRequest
+                 , containers >= 0.5 && < 0.6
+  Exposed-Modules: Kontiki.Raft.Classes.FSM
+                 , Kontiki.Raft.Classes.RPC
+                 , Kontiki.Raft.Classes.RPC.AppendEntriesRequest
+                 , Kontiki.Raft.Classes.RPC.AppendEntriesResponse
+                 , Kontiki.Raft.Classes.RPC.RequestVoteRequest
+                 , Kontiki.Raft.Classes.RPC.RequestVoteResponse
+                 , Kontiki.Raft.Classes.State.Persistent
+                 , Kontiki.Raft.Classes.State.Volatile
+                 , Kontiki.Raft.Classes.Types
   Other-Modules:   Kontiki.Raft.Classes.Lens
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
