@@ -30,7 +30,7 @@ Library
      indexed < 0.2,
      mtl < 2.3,
      pointed < 5.1,
-     bifunctors < 5.4
+     bifunctors < 5.5
   ghc-options:
      -Wall
   Extensions:
