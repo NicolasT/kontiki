@@ -1,0 +1,41 @@
+Name:                indexed-extras
+Version:             0.2
+Synopsis:            Indexed functors, monads and comonads that require extensions to Haskell98
+Description:         Indexed functors, monads and comonads that require extensions to Haskell98
+License:             BSD3
+License-file:        LICENSE
+Author:              Edward A. Kmett
+Maintainer:          Reiner Pope <reiner.pope@gmail.com>
+Copyright:           
+    Copyright (C) 2012 Reiner Pope,
+    Copyright (C) 2008 Edward A. Kmett, 
+    Copyright (C) 2004--2008 Dave Menendez, 
+    Copyright (C) 2007 Iavor Diatchki
+Category:            Control
+Build-type:          Simple
+Cabal-version:       >=1.6
+homepage:            https://github.com/reinerp/indexed-extras
+bug-reports:         https://github.com/reinerp/indexed-extras/issues
+
+source-repository head
+  type:                 git
+  location:             git://github.com/reinerp/indexed-extras.git
+
+Library
+  Exposed-modules:
+     Control.Monad.Indexed.Cont,
+     Control.Monad.Indexed.State
+  Build-depends:
+     base < 5,
+     indexed < 0.2,
+     mtl < 2.3,
+     pointed < 5.1,
+     bifunctors < 5.4
+  ghc-options:
+     -Wall
+  Extensions:
+     UndecidableInstances,
+     GeneralizedNewtypeDeriving,
+     FlexibleInstances,
+     MultiParamTypeClasses,
+     Rank2Types
