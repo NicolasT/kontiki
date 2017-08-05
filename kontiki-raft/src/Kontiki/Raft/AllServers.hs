@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Raft.AllServers (
@@ -9,21 +11,27 @@ import Control.Monad (when)
 
 import Control.Monad.State.Class (MonadState)
 
-import Control.Lens ((^.), (%=), use)
+import Control.Lens ((^.))
 
-import qualified Kontiki.Raft.Classes.FSM as FSM
-import Kontiki.Raft.Classes.FSM (MonadFSM(applyEntry))
+import Data.Default.Class (Default)
+
+import Control.Monad.Logger (MonadLogger, logInfo)
+
+-- import qualified Kontiki.Raft.Classes.FSM as FSM
+-- import Kontiki.Raft.Classes.FSM (MonadFSM(applyEntry))
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC (HasTerm(term))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
-import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTerm, getLogEntry, setCurrentTerm))
-import qualified Kontiki.Raft.Classes.State.Volatile as V
-import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastApplied))
-import qualified Kontiki.Raft.Classes.Types as T
-import Kontiki.Raft.Classes.Types (Index(succIndex))
+import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTerm, setCurrentTerm))
+-- import qualified Kontiki.Raft.Classes.State.Volatile as V
+import Kontiki.Raft.Classes.State.Volatile (VolatileState)
+-- import qualified Kontiki.Raft.Classes.Types as T
+-- import Kontiki.Raft.Classes.Types (Index(succIndex))
 
-import Kontiki.Raft.Role (Role)
+import Kontiki.Raft.Follower (convertToFollower)
+import Kontiki.Raft.State (SomeState)
 
+{-
 applyToCommitIndex :: ( MonadState (Role volatileState volatileLeaderState) m
                       , VolatileState volatileState
                       , MonadPersistentState m
@@ -42,18 +50,23 @@ applyToCommitIndex = do
         lastApplied %= succIndex
         (_, entry) <- getLogEntry la
         applyEntry entry
+-}
 
-checkTerm :: ( Monad m
+checkTerm :: ( MonadState (SomeState volatileState volatileLeaderState) m
              , MonadPersistentState m
              , HasTerm msg
              , RPC.Term msg ~ term
              , P.Term m ~ term
              , Ord term
+             , VolatileState volatileState
+             , Default volatileState
+             , MonadLogger m
              )
           => msg
           -> m ()
 checkTerm msg = do
     ct <- getCurrentTerm
-    when (msg ^. term> ct) $ do
+    when (msg ^. term > ct) $ do
+        $(logInfo) "Received message with higher term, converting to follower"
         setCurrentTerm (msg ^. term)
-        --- convertToFollower
+        convertToFollower

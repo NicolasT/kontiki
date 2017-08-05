@@ -15,6 +15,9 @@ module Kontiki.Raft.Classes.State.Persistent (
       MonadPersistentState(..)
     ) where
 
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State (StateT)
+
 -- | Persistent state on all servers
 --
 -- Updated on stable storage before responding to RPCs.
@@ -42,3 +45,17 @@ class MonadPersistentState m where
     -- was received by leader. First index is 1.
     getLogEntry :: Index m -> m (Term m, Entry m)
     setLogEntry :: Index m -> Term m -> Entry m -> m ()
+
+
+instance (Monad m, MonadPersistentState m) => MonadPersistentState (StateT s m) where
+    type Term (StateT s m) = Term m
+    type Node (StateT s m) = Node m
+    type Entry (StateT s m) = Entry m
+    type Index (StateT s m) = Index m
+
+    getCurrentTerm = lift getCurrentTerm
+    setCurrentTerm = lift . setCurrentTerm
+    getVotedFor = lift getVotedFor
+    setVotedFor = lift . setVotedFor
+    getLogEntry = lift . getLogEntry
+    setLogEntry i t e = lift $ setLogEntry i t e

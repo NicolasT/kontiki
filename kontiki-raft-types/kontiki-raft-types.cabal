@@ -33,7 +33,22 @@ Library
   Build-Depends:   base >= 4.9 && < 4.10
                  , data-default-class >= 0.1 && < 0.2
                  , lens >= 4.15 && < 4.16
+                 , monad-logger >= 0.3 && < 0.4
+                 , transformers >= 0.5 && < 0.6
                  , kontiki-raft-classes
   Exposed-Modules: Kontiki.Raft.Types
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+
+Test-Suite kontiki-raft-types-test
+  Type:           exitcode-stdio-1.0
+  Main-Is:        Main.hs
+  Build-Depends:  base >= 4.9 && < 4.10
+                , data-default-class >= 0.1 && < 0.2
+                , monad-logger >= 0.3 && < 0.4
+                , transformers >= 0.5 && < 0.6
+                , kontiki-raft
+                , kontiki-raft-types
+  Hs-Source-Dirs: test
+  Ghc-Options:    -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+

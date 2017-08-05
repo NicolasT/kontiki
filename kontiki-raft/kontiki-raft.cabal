@@ -35,13 +35,14 @@ Library
                  , indexed >= 0.1 && < 0.2
                  , indexed-extras >= 0.2 && < 0.3
                  , lens >= 4.15 && < 4.16
+                 , monad-logger >= 0.3 && < 0.4
                  , mtl >= 2.2 && < 2.3
                  , kontiki-raft-classes
   Exposed-Modules: Kontiki.Raft
-  Other-Modules:   Kontiki.Raft.State
-                 --  Kontiki.Raft.AllServers
+  Other-Modules:   Kontiki.Raft.AllServers
                  , Kontiki.Raft.Candidate
                  , Kontiki.Raft.Follower
                  , Kontiki.Raft.Leader
+                 , Kontiki.Raft.State
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists

@@ -1,4 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Raft.Types (
@@ -6,6 +9,8 @@ module Kontiki.Raft.Types (
     , Term
     , Node
     , VolatileState
+    , PersistentState(runPersistentState)
+    , initialPersistentState
     , RequestVoteRequest
     ) where
 
@@ -13,12 +18,18 @@ import Data.Word (Word64)
 
 import GHC.Generics (Generic)
 
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.State (StateT, gets, modify)
+
 import Data.Default.Class (Default)
 
 import Control.Lens (lens)
 
+import Control.Monad.Logger (MonadLogger, logDebugSH)
+
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
+import qualified Kontiki.Raft.Classes.State.Persistent as P
 import qualified Kontiki.Raft.Classes.State.Volatile as V
 import qualified Kontiki.Raft.Classes.Types as T
 
@@ -33,7 +44,7 @@ instance T.Index Index where
 
 
 newtype Term = Term Word64
-    deriving (Show, Eq, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 instance Default Term
 
@@ -59,6 +70,43 @@ instance V.VolatileState VolatileState where
 
     commitIndex = lens volatileStateCommitIndex (\v i -> v { volatileStateCommitIndex = i })
     lastApplied = lens volatileStateLastApplied (\v l -> v { volatileStateLastApplied = l })
+
+
+newtype PersistentState e m a = PersistentState { runPersistentState :: StateT (PersistentState' e) m a }
+    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger)
+
+data PersistentState' e = PersistentState' { persistentState'CurrentTerm :: Term
+                                           , persistentState'VotedFor :: Maybe Node
+                                           }
+    deriving (Show, Eq, Generic)
+
+initialPersistentState :: PersistentState' e
+initialPersistentState = PersistentState' { persistentState'CurrentTerm = T.term0
+                                          , persistentState'VotedFor = Nothing
+                                          }
+
+instance MonadLogger m => P.MonadPersistentState (PersistentState e m) where
+    type Term (PersistentState e m) = Term
+    type Node (PersistentState e m) = Node
+    type Entry (PersistentState e m) = e
+    type Index (PersistentState e m) = Index
+
+    getCurrentTerm = PersistentState $ do
+        t <- gets persistentState'CurrentTerm
+        $(logDebugSH) ("Get current term" :: String, t)
+        return t
+    setCurrentTerm t = PersistentState $ do
+        $(logDebugSH) ("Set current term" :: String, t)
+        modify (\s -> s { persistentState'CurrentTerm = t })
+    getVotedFor = PersistentState $ do
+        v <- gets persistentState'VotedFor
+        $(logDebugSH) ("Get voted for" :: String, v)
+        return v
+    setVotedFor v = PersistentState $ do
+        $(logDebugSH) ("Set voted for" :: String, v)
+        modify (\s -> s { persistentState'VotedFor = v })
+    getLogEntry _i = error "Not implemented"
+    setLogEntry _i _t _e = error "Not implemented"
 
 
 data RequestVoteRequest = RequestVoteRequest { requestVoteRequestTerm :: Term
