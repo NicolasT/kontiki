@@ -80,9 +80,10 @@ onRequestVoteRequest node req = do
         let maybeGrantVote = maybe True (== node) vf
         if maybeGrantVote
         then do
-            when (isNothing vf) $
-                setVotedFor (Just node) :: m (State vs vls 'Follower) (State vs vls 'Follower) ()
             candidateLogUpToDate <- isCandidateLogUpToDate req
+            when (isNothing vf && candidateLogUpToDate) $
+                setVotedFor (Just node) :: m (State vs vls 'Follower) (State vs vls 'Follower) ()
+
             let resp :: resp = def & term .~ currentTerm
                                    & voteGranted .~ candidateLogUpToDate
             sendRequestVoteResponse node resp
