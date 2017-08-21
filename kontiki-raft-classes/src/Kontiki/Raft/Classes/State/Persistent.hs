@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -6,7 +7,7 @@
 -- License: Apache (see the file LICENSE)
 -- Maintainer: Nicolas Trangez <ikke@nicolast.be>
 -- Stability: alpha
--- Portability: TypeFamilies
+-- Portability: FlexibleInstances, TypeFamilies
 --
 -- This module defines a monad to access persistent state stored by Raft
 -- nodes.
@@ -17,6 +18,9 @@ module Kontiki.Raft.Classes.State.Persistent (
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT)
+
+import Control.Monad.Indexed.State (IxStateT)
+import Control.Monad.Indexed.Trans (ilift)
 
 -- | Persistent state on all servers
 --
@@ -59,3 +63,16 @@ instance (Monad m, MonadPersistentState m) => MonadPersistentState (StateT s m) 
     setVotedFor = lift . setVotedFor
     getLogEntry = lift . getLogEntry
     setLogEntry i t e = lift $ setLogEntry i t e
+
+instance (Monad m, MonadPersistentState m) => MonadPersistentState (IxStateT m i i) where
+    type Term (IxStateT m i i) = Term m
+    type Node (IxStateT m i i) = Node m
+    type Entry (IxStateT m i i) = Entry m
+    type Index (IxStateT m i i) = Index m
+
+    getCurrentTerm = ilift getCurrentTerm
+    setCurrentTerm = ilift . setCurrentTerm
+    getVotedFor = ilift getVotedFor
+    setVotedFor = ilift . setVotedFor
+    getLogEntry = ilift . getLogEntry
+    setLogEntry i t e = ilift $ setLogEntry i t e

@@ -11,6 +11,7 @@ module Kontiki.Raft.Types (
     , VolatileState
     , PersistentState(runPersistentState)
     , initialPersistentState
+    , RPC (runRPC)
     , RequestVoteRequest
     ) where
 
@@ -19,9 +20,10 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Class (MonadTrans(lift))
 import Control.Monad.Trans.State (StateT, gets, modify)
 
-import Data.Default.Class (Default)
+import Data.Default.Class (Default(def))
 
 import Control.Lens (lens)
 
@@ -29,6 +31,7 @@ import Control.Monad.Logger (MonadLogger, logDebugSH)
 
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
+import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import qualified Kontiki.Raft.Classes.State.Volatile as V
 import qualified Kontiki.Raft.Classes.Types as T
@@ -73,7 +76,7 @@ instance V.VolatileState VolatileState where
 
 
 newtype PersistentState e m a = PersistentState { runPersistentState :: StateT (PersistentState' e) m a }
-    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger)
+    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadTrans)
 
 data PersistentState' e = PersistentState' { persistentState'CurrentTerm :: Term
                                            , persistentState'VotedFor :: Maybe Node
@@ -109,6 +112,35 @@ instance MonadLogger m => P.MonadPersistentState (PersistentState e m) where
     setLogEntry _i _t _e = error "Not implemented"
 
 
+instance (Monad m, RPC.MonadRPC m) => RPC.MonadRPC (PersistentState e m) where
+    type Node (PersistentState e m) = RPC.Node m
+    type RequestVoteRequest (PersistentState e m) = RPC.RequestVoteRequest m
+    type RequestVoteResponse (PersistentState e m) = RPC.RequestVoteResponse m
+    type AppendEntriesRequest (PersistentState e m) = RPC.AppendEntriesRequest m
+    type AppendEntriesResponse (PersistentState e m) = RPC.AppendEntriesResponse m
+
+    broadcastRequestVoteRequest = lift . RPC.broadcastRequestVoteRequest
+    sendRequestVoteResponse n m = lift $ RPC.sendRequestVoteResponse n m
+    sendAppendEntriesRequest n m = lift $ RPC.sendAppendEntriesRequest n m
+    sendAppendEntriesResponse n m = lift $ RPC.sendAppendEntriesResponse n m
+
+
+newtype RPC m a = RPC { runRPC :: m a }
+    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger)
+
+instance RPC.MonadRPC (RPC m) where
+    type Node (RPC m) = Node
+    type RequestVoteRequest (RPC m) = RequestVoteRequest
+    type RequestVoteResponse (RPC m) = RequestVoteResponse
+    type AppendEntriesRequest (RPC m) = ()
+    type AppendEntriesResponse (RPC m) = ()
+
+    broadcastRequestVoteRequest _ = error "broadcastRequestVoteRequest: Not implemented"
+    sendRequestVoteResponse _ _ = error "sendRequestVoteResponse: Not implemented"
+    sendAppendEntriesRequest _ _ = error "sendAppendEntriesRequest: Not implemented"
+    sendAppendEntriesResponse _ _ = error "sendAppendEntriesResponse: Not implemented"
+
+
 data RequestVoteRequest = RequestVoteRequest { requestVoteRequestTerm :: Term
                                              , requestVoteRequestCandidateId :: Node
                                              , requestVoteRequestLastLogIndex :: Index
@@ -130,3 +162,22 @@ instance RVReq.RequestVoteRequest RequestVoteRequest where
     candidateId = lens requestVoteRequestCandidateId (\r c -> r { requestVoteRequestCandidateId = c })
     lastLogIndex = lens requestVoteRequestLastLogIndex (\r i -> r { requestVoteRequestLastLogIndex = i })
     lastLogTerm = lens requestVoteRequestLastLogTerm (\r t -> r { requestVoteRequestLastLogTerm = t })
+
+
+data RequestVoteResponse = RequestVoteResponse { requestVoteResponseTerm :: Term
+                                               , requestVoteResponseVoteGranted :: Bool
+                                               }
+    deriving (Show, Eq, Generic)
+
+instance Default RequestVoteResponse where
+    def = RequestVoteResponse { requestVoteResponseTerm = def
+                              , requestVoteResponseVoteGranted = False
+                              }
+
+instance RPC.HasTerm RequestVoteResponse where
+    type Term RequestVoteResponse = Term
+
+    term = lens requestVoteResponseTerm (\r t -> r { requestVoteResponseTerm = t })
+
+instance RVResp.RequestVoteResponse RequestVoteResponse where
+    voteGranted = lens requestVoteResponseVoteGranted (\r g -> r { requestVoteResponseVoteGranted = g })

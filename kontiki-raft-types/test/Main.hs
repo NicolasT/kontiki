@@ -12,12 +12,13 @@ import qualified Kontiki.Raft.Types as T
 
 testOnRequestVoteRequest :: LoggingT IO ()
 testOnRequestVoteRequest = do
-    res <- flip runStateT T.initialPersistentState $ T.runPersistentState $ do
+    res <- T.runRPC $ flip runStateT T.initialPersistentState $ T.runPersistentState $ do
         R.initializePersistentState
         let s0 = R.initialState :: R.SomeState T.VolatileState Int
         liftIO $ print s0
         flip runStateT s0 $ do
-            R.onRequestVoteRequest (def :: T.RequestVoteRequest)
+            let node = def
+            R.onRequestVoteRequest node (def :: T.RequestVoteRequest)
     liftIO $ print res
 
 main :: IO ()
