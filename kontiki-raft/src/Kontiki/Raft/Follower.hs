@@ -72,8 +72,8 @@ onRequestVoteRequest node req = do
     if req ^. term < currentTerm
     then do
         -- Reply false if term < currentTerm (§5.1)
-        let resp :: resp = def & term .~ currentTerm
-                               & voteGranted .~ False
+        let resp = def & term .~ currentTerm
+                       & voteGranted .~ False
         sendRequestVoteResponse node resp :: m (State vs vls 'Follower) (State vs vls 'Follower) ()
     else do
         vf <- getVotedFor
@@ -84,8 +84,8 @@ onRequestVoteRequest node req = do
             when (isNothing vf && candidateLogUpToDate) $
                 setVotedFor (Just node) :: m (State vs vls 'Follower) (State vs vls 'Follower) ()
 
-            let resp :: resp = def & term .~ currentTerm
-                                   & voteGranted .~ candidateLogUpToDate
+            let resp = def & term .~ currentTerm
+                           & voteGranted .~ candidateLogUpToDate
             sendRequestVoteResponse node resp
         else do
             let resp = def & term .~ currentTerm

@@ -128,17 +128,25 @@ instance (Monad m, RPC.MonadRPC m) => RPC.MonadRPC (PersistentState e m) where
 newtype RPC m a = RPC { runRPC :: m a }
     deriving (Functor, Applicative, Monad, MonadIO, MonadLogger)
 
-instance RPC.MonadRPC (RPC m) where
+instance MonadLogger m => RPC.MonadRPC (RPC m) where
     type Node (RPC m) = Node
     type RequestVoteRequest (RPC m) = RequestVoteRequest
     type RequestVoteResponse (RPC m) = RequestVoteResponse
     type AppendEntriesRequest (RPC m) = ()
     type AppendEntriesResponse (RPC m) = ()
 
-    broadcastRequestVoteRequest _ = error "broadcastRequestVoteRequest: Not implemented"
-    sendRequestVoteResponse _ _ = error "sendRequestVoteResponse: Not implemented"
-    sendAppendEntriesRequest _ _ = error "sendAppendEntriesRequest: Not implemented"
-    sendAppendEntriesResponse _ _ = error "sendAppendEntriesResponse: Not implemented"
+    broadcastRequestVoteRequest m = do
+        $(logDebugSH) ("broadcastRequestVoteRequest" :: String, m)
+        error "broadcastRequestVoteRequest: Not implemented"
+    sendRequestVoteResponse n m = do
+        $(logDebugSH) ("sendRequestVoteResponse" :: String, n, m)
+        error "sendRequestVoteResponse: Not implemented"
+    sendAppendEntriesRequest n m = do
+        $(logDebugSH) ("sendAppendEntriesRequest" :: String, n, m)
+        error "sendAppendEntriesRequest: Not implemented"
+    sendAppendEntriesResponse n m = do
+        $(logDebugSH) ("sendAppendEntriesResponse" :: String, n, m)
+        error "sendAppendEntriesResponse: Not implemented"
 
 
 data RequestVoteRequest = RequestVoteRequest { requestVoteRequestTerm :: Term
