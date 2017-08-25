@@ -4,7 +4,22 @@ packages:
 - './kontiki-raft-classes'
 - './kontiki-raft-types'
 - './kontiki-raft'
+- './kontiki'
 - './indexed-extras'
+
+- location:
+    git: https://github.com/awakesecurity/gRPC-haskell.git
+    commit: 679e3d7ded733f0171723236e14f28832bfdff65
+  extra-dep: true
+- location:
+    git: https://github.com/awakenetworks/proto3-suite.git
+    commit: d9d0282978a785385c47642a9a46037e4263a87d
+  extra-dep: true
+- location:
+    git: https://github.com/awakenetworks/proto3-wire.git
+    commit: 077b7e329fd7f43b0628c23b83c5e2e05334002e
+  extra-dep: true
 
 extra-deps:
 - indexed-0.1.3
+- tasty-hedgehog-0.1.0.1

@@ -66,21 +66,21 @@ onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderSt
                         , RequestVoteRequest req
                         , P.Term m ~ term
                         , RPC.Term req ~ term
+                        , RPC.Term resp ~ term
                         , Ord term
                         , VolatileState volatileState
                         , Default volatileState
                         , MonadLogger m
                         , RPC.MonadRPC m
-                        , RPC.Term (RPC.RequestVoteResponse m) ~ term
                         , P.Node m ~ node
                         , RPC.Node m ~ node
-                        , RequestVoteResponse (RPC.RequestVoteResponse m)
-                        , Default (RPC.RequestVoteResponse m)
+                        , RequestVoteResponse resp
+                        , Default resp
                         , Eq node
                         )
                      => node
                      -> req
-                     -> m ()
+                     -> m resp
 onRequestVoteRequest node req = do
     A.checkTerm req
     dispatchHandler

@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Main (main) where
 
 import Control.Monad.IO.Class (liftIO)
@@ -18,7 +20,8 @@ testOnRequestVoteRequest = do
         liftIO $ print s0
         flip runStateT s0 $ do
             let node = def
-            R.onRequestVoteRequest node (def :: T.RequestVoteRequest)
+            resp :: T.RequestVoteResponse <- R.onRequestVoteRequest node (def :: T.RequestVoteRequest)
+            return resp
     liftIO $ print res
 
 main :: IO ()

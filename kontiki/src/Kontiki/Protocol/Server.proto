@@ -1,0 +1,18 @@
+syntax = "proto3";
+package kontiki;
+
+service Node {
+        rpc RequestVote (RequestVoteRequest) returns (RequestVoteResponse) {}
+}
+
+message RequestVoteRequest {
+        uint64 term = 1;
+        string candidateId = 2;
+        uint64 lastLogIndex = 3;
+        uint64 lastLogTerm = 4;
+}
+
+message RequestVoteResponse {
+        uint64 term = 1;
+        bool voteGranted = 2;
+}

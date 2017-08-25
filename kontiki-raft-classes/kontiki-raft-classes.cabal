@@ -14,7 +14,7 @@ Stability:     alpha
 Author:        Nicolas Trangez
 Maintainer:    ikke@nicolast.be
 Copyright:     Copyright (C) 2017 Nicolas Trangez
-License:       Apache
+License:       Apache-2.0
 License-File:  LICENSE
 Homepage:      https://github.com/NicolasT/kontiki/tree/master/kontiki-raft-classes#readme
 Bug-Reports:   https://github.com/NicolasT/kontiki/labels/kontiki-raft-classes
@@ -33,8 +33,13 @@ Source-Repository head
 Library
   Build-Depends:   base >= 4.9 && < 4.10
                  , containers >= 0.5 && < 0.6
+                 , hedgehog >= 0.5 && < 0.6
+                 , hedgehog-quickcheck >= 0.1 && < 0.2
                  , indexed >= 0.1 && < 0.2
                  , indexed-extras >= 0.2 && < 0.3
+                 , QuickCheck >= 2.9 && < 2.10
+                 , tasty >= 0.11 && < 0.12
+                 , tasty-hedgehog >= 0.1 && < 0.2
                  , transformers >= 0.5 && < 0.6
   Exposed-Modules: Kontiki.Raft.Classes.FSM
                  , Kontiki.Raft.Classes.RPC
@@ -44,7 +49,11 @@ Library
                  , Kontiki.Raft.Classes.RPC.RequestVoteResponse
                  , Kontiki.Raft.Classes.State.Persistent
                  , Kontiki.Raft.Classes.State.Volatile
+                 , Kontiki.Raft.Classes.Test
                  , Kontiki.Raft.Classes.Types
-  Other-Modules:   Kontiki.Raft.Classes.Lens
+  Other-Modules:   Kontiki.Raft.Classes.RPC.Test
+                 , Kontiki.Raft.Classes.Lens
+                 , Kontiki.Raft.Classes.Test.Utils
+                 , Kontiki.Raft.Classes.Types.Test
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists

@@ -13,7 +13,7 @@ Stability:     alpha
 Author:        Nicolas Trangez
 Maintainer:    ikke@nicolast.be
 Copyright:     Copyright (C) 2017 Nicolas Trangez
-License:       Apache
+License:       Apache-2.0
 License-File:  LICENSE
 Homepage:      https://github.com/NicolasT/kontiki/tree/master/kontiki-raft#readme
 Bug-Reports:   https://github.com/NicolasT/kontiki/labels/kontiki-raft

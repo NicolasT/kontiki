@@ -27,7 +27,7 @@ import Control.Lens ((&), (.~), (^.))
 
 import Data.Default.Class (Default(def))
 
-import Kontiki.Raft.Classes.RPC (HasTerm(term), MonadRPC(sendRequestVoteResponse))
+import Kontiki.Raft.Classes.RPC (HasTerm(term))
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (voteGranted)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
@@ -56,9 +56,6 @@ onRequestVoteRequest :: forall m node req resp term vs vls.
                         , HasTerm req
                         , RPC.Term req ~ term
                         , Ord term
-                        , MonadRPC (m (State vs vls 'Follower) (State vs vls 'Follower))
-                        , RPC.RequestVoteResponse (m (State vs vls 'Follower) (State vs vls 'Follower)) ~ resp
-                        , RPC.Node (m (State vs vls 'Follower) (State vs vls 'Follower)) ~ node
                         , RVResp.RequestVoteResponse resp
                         , RPC.Term resp ~ term
                         , Default resp
@@ -66,15 +63,14 @@ onRequestVoteRequest :: forall m node req resp term vs vls.
                         )
                      => node
                      -> req
-                     -> m (State vs vls 'Follower) (SomeState vs vls) ()
+                     -> m (State vs vls 'Follower) (SomeState vs vls) resp
 onRequestVoteRequest node req = do
     currentTerm <- getCurrentTerm
-    if req ^. term < currentTerm
+    resp :: resp <- if req ^. term < currentTerm
     then do
         -- Reply false if term < currentTerm (§5.1)
-        let resp = def & term .~ currentTerm
-                       & voteGranted .~ False
-        sendRequestVoteResponse node resp :: m (State vs vls 'Follower) (State vs vls 'Follower) ()
+        return $ def & term .~ currentTerm
+                     & voteGranted .~ False
     else do
         vf <- getVotedFor
         let maybeGrantVote = maybe True (== node) vf
@@ -84,14 +80,13 @@ onRequestVoteRequest node req = do
             when (isNothing vf && candidateLogUpToDate) $
                 setVotedFor (Just node) :: m (State vs vls 'Follower) (State vs vls 'Follower) ()
 
-            let resp = def & term .~ currentTerm
-                           & voteGranted .~ candidateLogUpToDate
-            sendRequestVoteResponse node resp
+            return $ def & term .~ currentTerm
+                         & voteGranted .~ candidateLogUpToDate
         else do
-            let resp = def & term .~ currentTerm
-                           & voteGranted .~ False
-            sendRequestVoteResponse node resp
+            return $ def & term .~ currentTerm
+                         & voteGranted .~ False
     imodify SomeState
+    return resp
   where
     isCandidateLogUpToDate _ = return True
     m >>= n = Ix.ibind n m
