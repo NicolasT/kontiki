@@ -33,13 +33,11 @@ Source-Repository head
 Library
   Build-Depends:   base >= 4.9 && < 4.10
                  , containers >= 0.5 && < 0.6
-                 , hedgehog >= 0.5 && < 0.6
-                 , hedgehog-quickcheck >= 0.1 && < 0.2
                  , indexed >= 0.1 && < 0.2
                  , indexed-extras >= 0.2 && < 0.3
                  , QuickCheck >= 2.9 && < 2.10
                  , tasty >= 0.11 && < 0.12
-                 , tasty-hedgehog >= 0.1 && < 0.2
+                 , tasty-quickcheck >= 0.8 && < 0.9
                  , transformers >= 0.5 && < 0.6
   Exposed-Modules: Kontiki.Raft.Classes.FSM
                  , Kontiki.Raft.Classes.RPC

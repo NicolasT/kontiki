@@ -12,28 +12,37 @@ import Test.Tasty (TestTree, testGroup)
 
 import Test.QuickCheck (Arbitrary)
 
-import qualified Kontiki.Raft.Classes.Types as T
-import qualified Kontiki.Raft.Classes.Types.Test as KRCT
+import qualified Kontiki.Raft.Classes.Types as Types
+import qualified Kontiki.Raft.Classes.Types.Test as Types
 import Kontiki.Raft.Classes.RPC (Term)
+import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AEReq
+import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
-import qualified Kontiki.Raft.Classes.RPC.Test as KRCR
+import qualified Kontiki.Raft.Classes.RPC.Test as RPC
 import Kontiki.Raft.Classes.Test.Utils (PropLensConstraints)
 
-tests :: forall index term requestVoteRequest requestVoteResponse.
-         ( T.Index index, Show index, Ord index, Arbitrary index, Typeable index
-         , T.Term term, Show term, Ord term, Arbitrary term, Typeable term
-         , Typeable requestVoteRequest
+tests :: forall index term requestVoteRequest requestVoteResponse appendEntriesRequest appendEntriesResponse.
+         ( Types.Index index, Show index, Ord index, Arbitrary index, Typeable index
+         , Types.Term term, Show term, Ord term, Arbitrary term, Typeable term
          , Typeable requestVoteRequest, RequestVoteRequest requestVoteRequest
          , PropLensConstraints requestVoteRequest (Term requestVoteRequest)
          , PropLensConstraints requestVoteRequest (RVReq.Node requestVoteRequest)
          , PropLensConstraints requestVoteRequest (RVReq.Index requestVoteRequest)
          , Typeable requestVoteResponse, RequestVoteResponse requestVoteResponse
          , PropLensConstraints requestVoteResponse (Term requestVoteResponse)
+         , Typeable appendEntriesRequest, AppendEntriesRequest appendEntriesRequest
+         , PropLensConstraints appendEntriesRequest (Term appendEntriesRequest)
+         , PropLensConstraints appendEntriesRequest (AEReq.Node appendEntriesRequest)
+         , PropLensConstraints appendEntriesRequest (AEReq.Index appendEntriesRequest)
+         , PropLensConstraints appendEntriesRequest (AEReq.Entry appendEntriesRequest)
+         , Typeable appendEntriesResponse, AppendEntriesResponse appendEntriesResponse
+         , PropLensConstraints appendEntriesResponse (Term appendEntriesResponse)
          )
       => TestTree
 tests = testGroup "Kontiki.Raft.Classes" [
-      KRCT.tests @index @term
-    , KRCR.tests @requestVoteRequest @requestVoteResponse
+      Types.tests @index @term
+    , RPC.tests @requestVoteRequest @requestVoteResponse @appendEntriesRequest @appendEntriesResponse
     ]

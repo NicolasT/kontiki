@@ -14,12 +14,9 @@ import Data.Proxy (Proxy(Proxy))
 import Data.Typeable (Typeable, typeRep, typeRepTyCon, tyConModule, tyConName)
 
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.Hedgehog (testProperty)
+import Test.Tasty.QuickCheck (testProperty)
 
 import Test.QuickCheck (Arbitrary)
-
-import Hedgehog ((===), forAll, property)
-import Hedgehog.Gen.QuickCheck (arbitrary)
 
 import Kontiki.Raft.Classes.Lens (Lens', set, view)
 
@@ -39,16 +36,7 @@ prop_lens :: forall s v.
           -> Lens' s v
           -> TestTree
 prop_lens n l = testGroup ("prop_lens " ++ n) [
-      testProperty (unwords ["view", n, "(set", n, "v s) ≡ v"]) $ property $ do
-        s :: s <- forAll arbitrary
-        v :: v <- forAll arbitrary
-        view l (set l v s) === v
-    , testProperty (unwords ["set", n, "(view", n, "s) s ≡ s"]) $ property $ do
-        s :: s <- forAll arbitrary
-        set l (view l s) s === s
-    , testProperty (unwords ["set", n, "v' (set", n, "v s) ≡ set", n, "v' s"]) $ property $ do
-        s :: s <- forAll arbitrary
-        v :: v <- forAll arbitrary
-        v' :: v <- forAll arbitrary
-        set l v' (set l v s) === set l v' s
+      testProperty (unwords ["view", n, "(set", n, "v s) ≡ v"]) $ \s v -> view l (set l v s) == v
+    , testProperty (unwords ["set", n, "(view", n, "s) s ≡ s"]) $ \s -> set l (view l s) s == s
+    , testProperty (unwords ["set", n, "v' (set", n, "v s) ≡ set", n, "v' s"]) $ \s v v' -> set l v' (set l v s) == set l v' s
     ]

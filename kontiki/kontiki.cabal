@@ -22,6 +22,8 @@ Build-Type:    Simple
 
 Extra-Source-Files:
   README.md
+  Makefile
+  src/Kontiki/Protocol/Server.proto
 
 Source-Repository head
   Type:     git

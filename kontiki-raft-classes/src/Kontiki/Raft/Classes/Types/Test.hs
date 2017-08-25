@@ -8,12 +8,9 @@ module Kontiki.Raft.Classes.Types.Test (tests) where
 import Data.Typeable (Typeable)
 
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.Hedgehog (testProperty)
+import Test.Tasty.QuickCheck (testProperty)
 
 import Test.QuickCheck (Arbitrary)
-
-import Hedgehog (assert, forAll, property)
-import Hedgehog.Gen.QuickCheck (arbitrary)
 
 import Kontiki.Raft.Classes.Test.Utils (typeId)
 import qualified Kontiki.Raft.Classes.Types as T
@@ -33,10 +30,10 @@ tests :: forall index term.
       => TestTree
 tests = testGroup "Kontiki.Raft.Classes.Types" [
       testGroup ("Term @" ++ typeId @term) [
-          testProperty "∀ term. term0 ≤ term" (property $ forAll arbitrary >>= \t -> assert (T.term0 <= (t :: term)))
+          testProperty "∀ term. term0 ≤ term" $ \t -> T.term0 <= (t :: term)
         ]
     , testGroup ("Index @" ++ typeId @index) [
-          testProperty "∀ index. index0 ≤ index" (property $ forAll arbitrary >>= \i -> assert (T.index0 <= (i :: index)))
-        , testProperty "∀ index. index < succIndex index" (property $ forAll arbitrary >>= \i -> assert ((i :: index) < T.succIndex i))
+          testProperty "∀ index. index0 ≤ index" $ \i -> T.index0 <= (i :: index)
+        , testProperty "∀ index. index < succIndex index" $ \i -> (i :: index) < T.succIndex i
         ]
     ]
