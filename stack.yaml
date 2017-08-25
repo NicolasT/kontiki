@@ -2,7 +2,6 @@ resolver: lts-9.0
 
 packages:
 - './kontiki-raft-classes'
-- './kontiki-raft-types'
 - './kontiki-raft'
 - './kontiki'
 
