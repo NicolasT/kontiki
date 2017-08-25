@@ -49,8 +49,9 @@ Library
                  , Kontiki.Raft.Classes.State.Volatile
                  , Kontiki.Raft.Classes.Test
                  , Kontiki.Raft.Classes.Types
-  Other-Modules:   Kontiki.Raft.Classes.RPC.Test
-                 , Kontiki.Raft.Classes.Lens
+  Other-Modules:   Kontiki.Raft.Classes.Lens
+                 , Kontiki.Raft.Classes.RPC.Test
+                 , Kontiki.Raft.Classes.State.Test
                  , Kontiki.Raft.Classes.Test.Utils
                  , Kontiki.Raft.Classes.Types.Test
   Hs-Source-Dirs:  src

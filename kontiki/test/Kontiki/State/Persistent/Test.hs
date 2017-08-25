@@ -12,7 +12,6 @@ import Test.Hspec (around, describe, it)
 import Test.Hspec.Expectations (shouldBe)
 import Test.QuickCheck (property)
 
-import qualified Kontiki.Raft as K
 import qualified Kontiki.Raft.Classes.Types as K
 import qualified Kontiki.Raft.Classes.State.Persistent as K
 
@@ -25,16 +24,6 @@ withDatabase fn = withSystemTempDirectory "kontiki-test" $ \dir -> do
 tests :: IO TestTree
 tests = testSpec "Kontiki.State.Persistent" $ do
     around withDatabase $ do
-        describe "initializePersistentState" $ do
-            let test act val db = do
-                    r <- runNoLoggingT $ runPersistentStateT db $ do
-                        K.initializePersistentState
-                        act
-                    r `shouldBe` val
-
-            it "sets currentTerm to term0" $ test K.getCurrentTerm K.term0
-            it "sets votedFor to Nothing" $ test K.getVotedFor Nothing
-
         describe "get/setCurrentTerm" $ do
             it "correctly stores new values" $ \db -> property $ \t -> do
                 (t0, t', t0') <- runNoLoggingT $ runPersistentStateT db $ do

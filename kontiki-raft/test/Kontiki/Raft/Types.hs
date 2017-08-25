@@ -217,3 +217,7 @@ instance V.VolatileState VolatileState where
 
 instance Default VolatileState where
     def = VolatileState (Index 0) (Index 0)
+
+instance Arbitrary VolatileState where
+    arbitrary = VolatileState <$> arbitrary
+                              <*> arbitrary

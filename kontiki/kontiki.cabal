@@ -68,7 +68,6 @@ Test-Suite kontiki-test
   Main-Is:         Main.hs
   Other-Modules:   Kontiki.Protocol.Server.Test
                  , Kontiki.State.Persistent.Test
-                 , Kontiki.State.Volatile.Test
                  , Kontiki.Types.Test
   Build-Depends:   base >= 4.9 && < 4.10
                  , binary >= 0.8 && < 0.9

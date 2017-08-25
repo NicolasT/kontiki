@@ -22,9 +22,12 @@ import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
 import qualified Kontiki.Raft.Classes.RPC.Test as RPC
+import qualified Kontiki.Raft.Classes.State.Test as State
+import Kontiki.Raft.Classes.State.Volatile (VolatileState)
+import qualified Kontiki.Raft.Classes.State.Volatile as V
 import Kontiki.Raft.Classes.Test.Utils (PropLensConstraints)
 
-tests :: forall index term requestVoteRequest requestVoteResponse appendEntriesRequest appendEntriesResponse.
+tests :: forall index term requestVoteRequest requestVoteResponse appendEntriesRequest appendEntriesResponse volatileState.
          ( Types.Index index, Show index, Ord index, Arbitrary index, Typeable index
          , Types.Term term, Show term, Ord term, Arbitrary term, Typeable term
          , Typeable requestVoteRequest, RequestVoteRequest requestVoteRequest
@@ -40,9 +43,12 @@ tests :: forall index term requestVoteRequest requestVoteResponse appendEntriesR
          , PropLensConstraints appendEntriesRequest (AEReq.Entry appendEntriesRequest)
          , Typeable appendEntriesResponse, AppendEntriesResponse appendEntriesResponse
          , PropLensConstraints appendEntriesResponse (Term appendEntriesResponse)
+         , Typeable volatileState, VolatileState volatileState
+         , PropLensConstraints volatileState (V.Index volatileState)
          )
       => TestTree
 tests = testGroup "Kontiki.Raft.Classes" [
       Types.tests @index @term
     , RPC.tests @requestVoteRequest @requestVoteResponse @appendEntriesRequest @appendEntriesResponse
+    , State.tests @volatileState
     ]

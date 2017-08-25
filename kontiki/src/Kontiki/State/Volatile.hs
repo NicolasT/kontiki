@@ -7,6 +7,8 @@ module Kontiki.State.Volatile (
 import Control.Lens (lens)
 import Data.Default (Default(def))
 
+import Test.QuickCheck (Arbitrary(arbitrary))
+
 import qualified Kontiki.Raft.Classes.State.Volatile as K
 
 import Kontiki.Types (Index)
@@ -24,3 +26,7 @@ instance K.VolatileState VolatileState where
 
 instance Default VolatileState where
     def = VolatileState def def
+
+instance Arbitrary VolatileState where
+    arbitrary = VolatileState <$> arbitrary
+                              <*> arbitrary
