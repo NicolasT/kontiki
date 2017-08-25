@@ -5,7 +5,11 @@ packages:
 - './kontiki-raft-types'
 - './kontiki-raft'
 - './kontiki'
-- './indexed-extras'
+
+- location:
+    git: https://github.com/NicolasT/indexed-extras.git
+    commit: 4dc01969f5169bc853c6159662181b305006f48e
+  extra-dep: true
 
 - location:
     git: https://github.com/awakesecurity/gRPC-haskell.git
