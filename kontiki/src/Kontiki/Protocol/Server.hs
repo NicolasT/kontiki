@@ -34,20 +34,33 @@ data Node request response = Node{nodeRequestVote ::
                                     ->
                                     Hs.IO
                                       (response 'HsGRPC.Normal
-                                         Kontiki.Protocol.Server.RequestVoteResponse)}
+                                         Kontiki.Protocol.Server.RequestVoteResponse),
+                                  nodeAppendEntries ::
+                                  request 'HsGRPC.Normal
+                                    Kontiki.Protocol.Server.AppendEntriesRequest
+                                    Kontiki.Protocol.Server.AppendEntriesResponse
+                                    ->
+                                    Hs.IO
+                                      (response 'HsGRPC.Normal
+                                         Kontiki.Protocol.Server.AppendEntriesResponse)}
                            deriving Hs.Generic
  
 nodeServer ::
              Node HsGRPC.ServerRequest HsGRPC.ServerResponse ->
                HsGRPC.ServiceOptions -> Hs.IO ()
-nodeServer Node{nodeRequestVote = nodeRequestVote}
+nodeServer
+  Node{nodeRequestVote = nodeRequestVote,
+       nodeAppendEntries = nodeAppendEntries}
   (ServiceOptions serverHost serverPort useCompression
      userAgentPrefix userAgentSuffix initialMetadata sslConfig logger)
   = (HsGRPC.serverLoop
        HsGRPC.defaultOptions{HsGRPC.optNormalHandlers =
                                [(HsGRPC.UnaryHandler
                                    (HsGRPC.MethodName "/kontiki.Node/RequestVote")
-                                   (HsGRPC.convertGeneratedServerHandler nodeRequestVote))],
+                                   (HsGRPC.convertGeneratedServerHandler nodeRequestVote)),
+                                (HsGRPC.UnaryHandler
+                                   (HsGRPC.MethodName "/kontiki.Node/AppendEntries")
+                                   (HsGRPC.convertGeneratedServerHandler nodeAppendEntries))],
                              HsGRPC.optClientStreamHandlers = [],
                              HsGRPC.optServerStreamHandlers = [],
                              HsGRPC.optBiDiStreamHandlers = [], optServerHost = serverHost,
@@ -65,6 +78,10 @@ nodeClient client
       ((Hs.pure (HsGRPC.clientRequest client)) <*>
          (HsGRPC.clientRegisterMethod client
             (HsGRPC.MethodName "/kontiki.Node/RequestVote")))
+      <*>
+      ((Hs.pure (HsGRPC.clientRequest client)) <*>
+         (HsGRPC.clientRegisterMethod client
+            (HsGRPC.MethodName "/kontiki.Node/AppendEntries")))
  
 data RequestVoteRequest = RequestVoteRequest{requestVoteRequestTerm
                                              :: Hs.Word64,
@@ -160,5 +177,131 @@ instance HsProtobuf.Message RequestVoteResponse where
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 2)
                 (HsProtobuf.Prim HsProtobuf.Bool)
                 (HsProtobuf.Single "voteGranted")
+                []
+                Hs.Nothing)]
+ 
+data AppendEntriesRequest = AppendEntriesRequest{appendEntriesRequestTerm
+                                                 :: Hs.Word64,
+                                                 appendEntriesRequestLeaderId :: Hs.Text,
+                                                 appendEntriesRequestPrevLogIndex :: Hs.Word64,
+                                                 appendEntriesRequestPrevLogTerm :: Hs.Word64,
+                                                 appendEntriesRequestEntries ::
+                                                 Hs.Vector Hs.ByteString,
+                                                 appendEntriesRequestLeaderCommit :: Hs.Word64}
+                          deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
+ 
+instance HsProtobuf.Named AppendEntriesRequest where
+        nameOf _ = (Hs.fromString "AppendEntriesRequest")
+ 
+instance HsProtobuf.Message AppendEntriesRequest where
+        encodeMessage _
+          AppendEntriesRequest{appendEntriesRequestTerm =
+                                 appendEntriesRequestTerm,
+                               appendEntriesRequestLeaderId = appendEntriesRequestLeaderId,
+                               appendEntriesRequestPrevLogIndex =
+                                 appendEntriesRequestPrevLogIndex,
+                               appendEntriesRequestPrevLogTerm = appendEntriesRequestPrevLogTerm,
+                               appendEntriesRequestEntries = appendEntriesRequestEntries,
+                               appendEntriesRequestLeaderCommit =
+                                 appendEntriesRequestLeaderCommit}
+          = (Hs.mconcat
+               [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
+                   appendEntriesRequestTerm),
+                (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 2)
+                   appendEntriesRequestLeaderId),
+                (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 3)
+                   appendEntriesRequestPrevLogIndex),
+                (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 4)
+                   appendEntriesRequestPrevLogTerm),
+                (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 5)
+                   (HsProtobuf.UnpackedVec appendEntriesRequestEntries)),
+                (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 6)
+                   appendEntriesRequestLeaderCommit)])
+        decodeMessage _
+          = (Hs.pure AppendEntriesRequest) <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 1))
+              <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 2))
+              <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 3))
+              <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 4))
+              <*>
+              ((Hs.pure HsProtobuf.unpackedvec) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 5)))
+              <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 6))
+        dotProto _
+          = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "term")
+                []
+                Hs.Nothing),
+             (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 2)
+                (HsProtobuf.Prim HsProtobuf.String)
+                (HsProtobuf.Single "leaderId")
+                []
+                Hs.Nothing),
+             (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 3)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "prevLogIndex")
+                []
+                Hs.Nothing),
+             (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 4)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "prevLogTerm")
+                []
+                Hs.Nothing),
+             (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 5)
+                (HsProtobuf.Repeated HsProtobuf.Bytes)
+                (HsProtobuf.Single "entries")
+                []
+                Hs.Nothing),
+             (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 6)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "leaderCommit")
+                []
+                Hs.Nothing)]
+ 
+data AppendEntriesResponse = AppendEntriesResponse{appendEntriesResponseTerm
+                                                   :: Hs.Word64,
+                                                   appendEntriesResponseSuccess :: Hs.Bool}
+                           deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
+ 
+instance HsProtobuf.Named AppendEntriesResponse where
+        nameOf _ = (Hs.fromString "AppendEntriesResponse")
+ 
+instance HsProtobuf.Message AppendEntriesResponse where
+        encodeMessage _
+          AppendEntriesResponse{appendEntriesResponseTerm =
+                                  appendEntriesResponseTerm,
+                                appendEntriesResponseSuccess = appendEntriesResponseSuccess}
+          = (Hs.mconcat
+               [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
+                   appendEntriesResponseTerm),
+                (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 2)
+                   appendEntriesResponseSuccess)])
+        decodeMessage _
+          = (Hs.pure AppendEntriesResponse) <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 1))
+              <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 2))
+        dotProto _
+          = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "term")
+                []
+                Hs.Nothing),
+             (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 2)
+                (HsProtobuf.Prim HsProtobuf.Bool)
+                (HsProtobuf.Single "success")
                 []
                 Hs.Nothing)]

@@ -3,6 +3,7 @@ package kontiki;
 
 service Node {
         rpc RequestVote (RequestVoteRequest) returns (RequestVoteResponse) {}
+        rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse) {}
 }
 
 message RequestVoteRequest {
@@ -15,4 +16,18 @@ message RequestVoteRequest {
 message RequestVoteResponse {
         uint64 term = 1;
         bool voteGranted = 2;
+}
+
+message AppendEntriesRequest {
+        uint64 term = 1;
+        string leaderId = 2;
+        uint64 prevLogIndex = 3;
+        uint64 prevLogTerm = 4;
+        repeated bytes entries = 5;
+        uint64 leaderCommit = 6;
+}
+
+message AppendEntriesResponse {
+        uint64 term = 1;
+        bool success = 2;
 }

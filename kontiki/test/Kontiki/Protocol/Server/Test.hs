@@ -9,12 +9,15 @@ import Proto3.Suite.Class (Message, fromByteString, toLazyByteString)
 
 import Hedgehog (Gen, Property, forAll, property, tripping)
 import qualified Hedgehog.Gen as G
+import Hedgehog.Gen.QuickCheck (arbitrary)
 import qualified Hedgehog.Range as R
 
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hedgehog (testProperty)
 
-import Kontiki.Protocol.Server (RequestVoteRequest(RequestVoteRequest), RequestVoteResponse(RequestVoteResponse))
+import Kontiki.Protocol.Server (AppendEntriesResponse, RequestVoteRequest(RequestVoteRequest), RequestVoteResponse(RequestVoteResponse))
+import Kontiki.Protocol.Server.AppendEntriesRequest (AppendEntriesRequest(getAppendEntriesRequest))
+import Kontiki.Protocol.Server.Instances ()
 
 prop_trip :: (Message a, Eq a, Show a)
           => Gen a
@@ -27,6 +30,8 @@ tests :: TestTree
 tests = testGroup "Kontiki.Protocol.Server" [
       testProperty "tripping RequestVoteRequest" (prop_trip genRequestVoteRequest)
     , testProperty "tripping RequestVoteResponse" (prop_trip genRequestVoteResponse)
+    , testProperty "tripping AppendEntriesRequest" (prop_trip (getAppendEntriesRequest <$> (arbitrary :: Gen (AppendEntriesRequest Int))))
+    , testProperty "tripping AppendEntriesResponse" (prop_trip (arbitrary :: Gen AppendEntriesResponse))
     ]
   where
     genRequestVoteRequest = RequestVoteRequest <$> G.word64 R.constantBounded

@@ -11,11 +11,12 @@ import Data.Text.Lazy (fromStrict)
 import Data.Text.Arbitrary ()
 
 import qualified Kontiki.Raft.Classes.RPC as RPC
+import qualified Kontiki.Raft.Classes.RPC.AppendEntriesResponse as AEResp
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
 
 import Kontiki.Types (Term(Term, getTerm), Index(Index, getIndex), Node(Node, getNode))
-import Kontiki.Protocol.Server (RequestVoteRequest(RequestVoteRequest), RequestVoteResponse(RequestVoteResponse))
+import Kontiki.Protocol.Server (AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse)
 import qualified Kontiki.Protocol.Server as S
 
 instance RPC.HasTerm RequestVoteRequest where
@@ -32,10 +33,10 @@ instance RVReq.RequestVoteRequest RequestVoteRequest where
     lastLogTerm = lens (Term . S.requestVoteRequestLastLogTerm) (\r t -> r { S.requestVoteRequestLastLogTerm = getTerm t })
 
 instance Arbitrary RequestVoteRequest where
-    arbitrary = RequestVoteRequest <$> arbitrary
-                                   <*> (fromStrict <$> arbitrary)
-                                   <*> arbitrary
-                                   <*> arbitrary
+    arbitrary = S.RequestVoteRequest <$> arbitrary
+                                     <*> (fromStrict <$> arbitrary)
+                                     <*> arbitrary
+                                     <*> arbitrary
 
 
 instance RPC.HasTerm RequestVoteResponse where
@@ -47,5 +48,18 @@ instance RVResp.RequestVoteResponse RequestVoteResponse where
     voteGranted = lens S.requestVoteResponseVoteGranted (\r g -> r { S.requestVoteResponseVoteGranted = g })
 
 instance Arbitrary RequestVoteResponse where
-    arbitrary = RequestVoteResponse <$> arbitrary
-                                    <*> arbitrary
+    arbitrary = S.RequestVoteResponse <$> arbitrary
+                                      <*> arbitrary
+
+
+instance RPC.HasTerm AppendEntriesResponse where
+    type Term AppendEntriesResponse = Term
+
+    term = lens (Term . S.appendEntriesResponseTerm) (\r t -> r { S.appendEntriesResponseTerm = getTerm t })
+
+instance AEResp.AppendEntriesResponse AppendEntriesResponse where
+    success = lens S.appendEntriesResponseSuccess (\r s -> r { S.appendEntriesResponseSuccess = s })
+
+instance Arbitrary AppendEntriesResponse where
+    arbitrary = S.AppendEntriesResponse <$> arbitrary
+                                        <*> arbitrary
