@@ -9,6 +9,8 @@ module Kontiki.Raft.State (
       Role(..)
     , State(..)
     , SomeState(..)
+    , role
+    , volatileState
     ) where
 
 import Control.Lens ((^.), (&), (.~), lens)
@@ -18,6 +20,7 @@ import Kontiki.Raft.Classes.State.Volatile (VolatileState(Index, commitIndex, la
 data Role = Follower
           | Candidate
           | Leader
+    deriving (Show, Eq)
 
 data State volatileState volatileLeaderState (r :: Role) where
     F :: volatileState -> State volatileState volatileLeaderState 'Follower
@@ -69,3 +72,15 @@ instance (Eq volatileState, Eq volatileLeaderState) => Eq (SomeState volatileSta
                 L _ _ -> case b' of
                     L _ _ -> a' == b'
                     _ -> False
+
+role :: SomeState volatileState volatileLeaderState -> Role
+role (SomeState s) = case s of
+    F _ -> Follower
+    C _ -> Candidate
+    L _ _ -> Leader
+
+volatileState :: SomeState volatileState volatileLeaderState -> volatileState
+volatileState (SomeState s) = case s of
+    F v -> v
+    C v -> v
+    L v _ -> v

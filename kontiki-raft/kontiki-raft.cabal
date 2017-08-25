@@ -46,3 +46,23 @@ Library
                  , Kontiki.Raft.State
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+
+Test-Suite kontiki-raft-test
+  Type:            exitcode-stdio-1.0
+  Main-Is:         Main.hs
+  Other-Modules:   Kontiki.Raft.Test
+                 , Kontiki.Raft.Types
+  Build-Depends:   base >= 4.9 && < 4.10
+                 , data-default >= 0.7 && < 0.8
+                 , hspec-expectations >= 0.8 && < 0.9
+                 , lens >= 4.15 && < 4.16
+                 , monad-logger >= 0.3 && < 0.4
+                 , mtl >= 2.2 && < 2.3
+                 , QuickCheck >= 2.9 && < 2.10
+                 , tasty >= 0.11 && < 0.12
+                 , tasty-hspec >= 1.1 && < 1.2
+                 , transformers >= 0.5 && < 0.6
+                 , kontiki-raft
+                 , kontiki-raft-classes
+  Hs-Source-Dirs:  test
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N

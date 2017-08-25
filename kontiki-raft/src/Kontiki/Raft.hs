@@ -8,6 +8,9 @@
 module Kontiki.Raft (
       initialState
     , S.SomeState
+    , S.Role(..)
+    , S.role
+    , S.volatileState
     , initializePersistentState
     , onRequestVoteRequest
     ) where
