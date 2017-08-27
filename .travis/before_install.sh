@@ -27,4 +27,4 @@ extra-lib-dirs:
 - ${GRPC_PREFIX}/lib
 EOF
 
-caat ~/.stack/config.yaml
+cat ~/.stack/config.yaml
