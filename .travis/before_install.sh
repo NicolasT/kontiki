@@ -10,11 +10,11 @@ travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wild
 chmod a+x $HOME/.local/bin/stack
 
 # Install GRPC
-if ! [ -f ${GRPC_PREFIX}/include/grpc/grpc.h ]; then
+if ! [ -f ${GRPC_PREFIX}/lib/libgrpc_unsecure.so ]; then
         pushd /tmp
         git clone --recurse-submodules --branch ${GRPC_TAG} https://github.com/grpc/grpc.git
         pushd grpc
-        make -j2 prefix=${GRPC_PREFIX} install
+        make -j2 prefix=${GRPC_PREFIX} install_c
         popd
         popd
 fi
