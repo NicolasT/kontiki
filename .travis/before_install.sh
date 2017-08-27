@@ -21,6 +21,8 @@ fi
 
 # Configure Stack
 cat >> ~/.stack/config.yaml << EOF
+
+# GRPC is installed in ${GRPC_PREFIX}
 extra-include-dirs:
 - ${GRPC_PREFIX}/include
 extra-lib-dirs:
