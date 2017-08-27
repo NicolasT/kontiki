@@ -6,6 +6,7 @@ cache:
   directories:
   - $HOME/.stack
   - .stack-work/
+  - $HOME/.local
 
 addons:
   apt:
@@ -13,17 +14,12 @@ addons:
     - libleveldb-dev
 
 before_install:
-- mkdir -p $HOME/.local/bin
+- .travis/before_install.sh
 - export PATH=$HOME/.local/bin:$PATH
-- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C $HOME/.local/bin '*/stack'
-- chmod a+x $HOME/.local/bin/stack
-
-- cd /tmp && wget https://github.com/grpc/grpc/archive/v1.3.9.tar.gz && tar xvf v1.3.9.tar.gz && cd grpc-1.3.9 && make -j2 install
 
 install:
-- travis_wait stack -j 2 --no-terminal setup
-- travis_wait stack -j 2 --no-terminal build --test --haddock --only-snapshot
+- .travis/install.sh
 
 script:
-- stack -j 2 --no-terminal build --test --haddock --pedantic
+- stack -j 2 --no-terminal build --test --pedantic
 - stack -j 2 --no-terminal sdist
