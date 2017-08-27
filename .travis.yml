@@ -19,6 +19,7 @@ before_install:
 - export PATH=$HOME/.local/bin:$PATH
 
 install:
+- export -f travis_retry
 - .travis/install.sh
 
 script:
