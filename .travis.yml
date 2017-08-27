@@ -14,9 +14,7 @@ addons:
     - libleveldb-dev
 
 before_install:
-- export -a && for f in $(declare -F | awk '{ print $3; }'); do eval declare -f -x $f; done
 - export PATH=$HOME/.local/bin:$PATH
-
 - .travis/before_install.sh
 
 install:
