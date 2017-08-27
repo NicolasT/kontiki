@@ -7,6 +7,13 @@ cache:
   - $HOME/.stack
   - .stack-work/
 
+addons:
+  apt:
+    packages:
+    - libleveldb-dev
+    - libgrpc-dev
+
+
 before_install:
 - mkdir -p $HOME/.local/bin
 - export PATH=$HOME/.local/bin:$PATH

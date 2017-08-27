@@ -30,7 +30,7 @@ instance RVReq.RequestVoteRequest RequestVoteRequest where
     type Node RequestVoteRequest = Node
     type Index RequestVoteRequest = Index
 
-    candidateId = lens (Node . S.requestVoteRequestCandidateId) (\r n -> r { S.requestVoteRequestCandidateId = getNode n })
+    candidateId = lens (Node . Text.toStrict . S.requestVoteRequestCandidateId) (\r n -> r { S.requestVoteRequestCandidateId = Text.fromStrict $ getNode n })
     lastLogIndex = lens (Index . S.requestVoteRequestLastLogIndex) (\r i -> r { S.requestVoteRequestLastLogIndex = getIndex i })
     lastLogTerm = lens (Term . S.requestVoteRequestLastLogTerm) (\r t -> r { S.requestVoteRequestLastLogTerm = getTerm t })
 

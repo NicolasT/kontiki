@@ -29,6 +29,8 @@ import Data.Default.Class (Default(def))
 
 import Kontiki.Raft.Classes.RPC (HasTerm(term))
 import qualified Kontiki.Raft.Classes.RPC as RPC
+import Kontiki.Raft.Classes.RPC.RequestVoteRequest (candidateId)
+import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (voteGranted)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTerm, getVotedFor, setVotedFor))
@@ -54,17 +56,18 @@ onRequestVoteRequest :: forall m node req resp term vs vls.
                         , P.Node (m (State vs vls 'Follower) (State vs vls 'Follower)) ~ node
                         , P.Term (m (State vs vls 'Follower) (State vs vls 'Follower)) ~ term
                         , HasTerm req
+                        , RVReq.RequestVoteRequest req
                         , RPC.Term req ~ term
+                        , RVReq.Node req ~ node
                         , Ord term
                         , RVResp.RequestVoteResponse resp
                         , RPC.Term resp ~ term
                         , Default resp
                         , Eq node
                         )
-                     => node
-                     -> req
+                     => req
                      -> m (State vs vls 'Follower) (SomeState vs vls) resp
-onRequestVoteRequest node req = do
+onRequestVoteRequest req = do
     currentTerm <- getCurrentTerm
     resp :: resp <- if req ^. term < currentTerm
     then do
@@ -73,6 +76,7 @@ onRequestVoteRequest node req = do
                      & voteGranted .~ False
     else do
         vf <- getVotedFor
+        let node = req ^. candidateId
         let maybeGrantVote = maybe True (== node) vf
         if maybeGrantVote
         then do

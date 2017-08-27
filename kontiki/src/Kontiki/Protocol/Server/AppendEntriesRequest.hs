@@ -12,11 +12,11 @@ import Data.Binary (Binary, encode, decode)
 
 import qualified Data.ByteString.Lazy as BS
 
-import Data.Text.Lazy (fromStrict)
-
 import qualified Data.Vector as V
 
 import Control.Lens (lens)
+
+import qualified Data.Text.Lazy as Text
 
 import Test.QuickCheck (Arbitrary, arbitrary)
 import Data.Text.Arbitrary ()
@@ -43,8 +43,8 @@ instance Binary e => AEReq.AppendEntriesRequest (AppendEntriesRequest e) where
     type Entry (AppendEntriesRequest e) = e
 
     leaderId = lens
-        (Node . S.appendEntriesRequestLeaderId . getAppendEntriesRequest)
-        (\(AppendEntriesRequest r) n -> AppendEntriesRequest r { S.appendEntriesRequestLeaderId = getNode n })
+        (Node . Text.toStrict . S.appendEntriesRequestLeaderId . getAppendEntriesRequest)
+        (\(AppendEntriesRequest r) n -> AppendEntriesRequest r { S.appendEntriesRequestLeaderId = Text.fromStrict $ getNode n })
     prevLogIndex = lens
         (Index . S.appendEntriesRequestPrevLogIndex . getAppendEntriesRequest)
         (\(AppendEntriesRequest r) i -> AppendEntriesRequest r { S.appendEntriesRequestPrevLogIndex = getIndex i })
@@ -63,7 +63,7 @@ instance (Arbitrary e, Binary e) => Arbitrary (AppendEntriesRequest e) where
         es <- arbitrary
         let es' = V.fromList $ map (BS.toStrict . encode) (es :: [e])
         req <- S.AppendEntriesRequest <$> arbitrary
-                                      <*> (fromStrict <$> arbitrary)
+                                      <*> (Text.fromStrict <$> arbitrary)
                                       <*> arbitrary
                                       <*> arbitrary
                                       <*> pure es'

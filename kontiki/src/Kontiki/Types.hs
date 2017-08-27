@@ -7,8 +7,8 @@ module Kontiki.Types (
     ) where
 
 import Data.Word (Word64)
+import Data.Text (Text)
 import Data.Text.Arbitrary ()
-import Data.Text.Lazy (Text, fromStrict, toStrict)
 import GHC.Generics (Generic)
 import Data.Binary (Binary)
 import Data.Default (Default(def))
@@ -53,5 +53,5 @@ newtype Node = Node { getNode :: Text }
 instance Binary Node
 
 instance Arbitrary Node where
-    arbitrary = (Node . fromStrict) <$> arbitrary
-    shrink = map (Node . fromStrict) . shrink . toStrict . getNode
+    arbitrary = Node <$> arbitrary
+    shrink = map Node . shrink . getNode

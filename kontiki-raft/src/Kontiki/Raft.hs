@@ -10,6 +10,7 @@ module Kontiki.Raft (
     , S.SomeState
     , S.Role(..)
     , S.role
+    , S.volatileState
     , initializePersistentState
     , onRequestVoteRequest
     ) where
@@ -26,6 +27,7 @@ import Control.Monad.Logger (MonadLogger, logInfo)
 
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
+import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
 --import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
 --import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
@@ -66,6 +68,7 @@ initializePersistentState = do
 onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderState) m
                         , MonadPersistentState m
                         , RequestVoteRequest req
+                        , RVReq.Node req ~ node
                         , P.Term m ~ term
                         , RPC.Term req ~ term
                         , RPC.Term resp ~ term
@@ -78,13 +81,12 @@ onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderSt
                         , Default resp
                         , Eq node
                         )
-                     => node
-                     -> req
+                     => req
                      -> m resp
-onRequestVoteRequest node req = do
+onRequestVoteRequest req = do
     A.checkTerm req
     dispatchHandler
-        (F.onRequestVoteRequest node req)
+        (F.onRequestVoteRequest req)
         (C.onRequestVoteRequest req)
         (L.onRequestVoteRequest req)
 

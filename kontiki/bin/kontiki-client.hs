@@ -19,7 +19,7 @@ import Data.Default (def)
 main :: IO ()
 main = do
     let cfg = ClientConfig (Host "localhost") (Port 50051) [] Nothing
-        req = def { requestVoteRequestTerm = 10 }
+        req = def { requestVoteRequestCandidateId = "kontiki-client", requestVoteRequestTerm = 10 }
     withGRPC $ \g -> withClient g cfg $ \c -> do
         Node{..} <- nodeClient c
         nodeRequestVote (ClientNormalRequest req 5 mempty) >>= \case
