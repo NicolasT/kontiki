@@ -75,9 +75,9 @@ nodeAppendEntries = undefined
 
 mapRole :: K.Role -> Text
 mapRole = \case
-    K.Follower -> "Follower"
-    K.Candidate -> "Candidate"
-    K.Leader -> "Leader"
+    K.Follower -> "follower"
+    K.Candidate -> "candidate"
+    K.Leader -> "leader"
 
 main :: IO ()
 main = do
