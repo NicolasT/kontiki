@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Kontiki.Raft.AllServers (
+module Kontiki.Raft.Internal.AllServers (
       checkTerm
     ) where
 
@@ -28,8 +28,8 @@ import Kontiki.Raft.Classes.State.Volatile (VolatileState)
 -- import qualified Kontiki.Raft.Classes.Types as T
 -- import Kontiki.Raft.Classes.Types (Index(succIndex))
 
-import Kontiki.Raft.Follower (convertToFollower)
-import Kontiki.Raft.State (SomeState)
+import Kontiki.Raft.Internal.Follower (convertToFollower)
+import Kontiki.Raft.Internal.State (SomeState)
 
 {-
 applyToCommitIndex :: ( MonadState (Role volatileState volatileLeaderState) m

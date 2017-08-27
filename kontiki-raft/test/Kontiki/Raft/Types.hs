@@ -6,13 +6,13 @@ module Kontiki.Raft.Types (
       Term(..)
     , Index(..)
     , Node(..)
-    , RequestVoteRequest
-    , RequestVoteResponse
-    , AppendEntriesRequest
-    , AppendEntriesResponse
+    , RequestVoteRequest(..)
+    , RequestVoteResponse(..)
+    , AppendEntriesRequest(..)
+    , AppendEntriesResponse(..)
     , PersistentState(..)
     , runPersistentStateT
-    , VolatileState
+    , VolatileState(..)
     ) where
 
 import Data.Typeable (Typeable)
@@ -48,6 +48,8 @@ instance Arbitrary Term where
     arbitrary = Term <$> arbitrary
     shrink = map Term . shrink . getTerm
 
+instance Default Term
+
 
 newtype Index = Index { getIndex :: Word64 }
     deriving (Show, Eq, Ord, Typeable, Generic)
@@ -60,6 +62,8 @@ instance Arbitrary Index where
     arbitrary = Index <$> arbitrary
     shrink = map Index . shrink . getIndex
 
+instance Default Index
+
 
 newtype Node = Node { getNode :: Int }
     deriving (Show, Eq, Typeable, Generic)
@@ -67,6 +71,8 @@ newtype Node = Node { getNode :: Int }
 instance Arbitrary Node where
     arbitrary = Node <$> arbitrary
     shrink = map Node . shrink . getNode
+
+instance Default Node
 
 
 newtype Entry = Entry { getEntry :: Int }

@@ -10,7 +10,6 @@ module Kontiki.Raft (
     , S.SomeState
     , S.Role(..)
     , S.role
-    , S.volatileState
     , initializePersistentState
     , onRequestVoteRequest
     ) where
@@ -36,11 +35,11 @@ import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastAppli
 import qualified Kontiki.Raft.Classes.State.Volatile as V
 import Kontiki.Raft.Classes.Types (Index(index0), Term (term0))
 
-import qualified Kontiki.Raft.AllServers as A
-import qualified Kontiki.Raft.Candidate as C
-import qualified Kontiki.Raft.Follower as F
-import qualified Kontiki.Raft.Leader as L
-import qualified Kontiki.Raft.State as S
+import qualified Kontiki.Raft.Internal.AllServers as A
+import qualified Kontiki.Raft.Internal.Candidate as C
+import qualified Kontiki.Raft.Internal.Follower as F
+import qualified Kontiki.Raft.Internal.Leader as L
+import qualified Kontiki.Raft.Internal.State as S
 
 initialState :: ( Default volatileState
                 , VolatileState volatileState
@@ -74,9 +73,7 @@ onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderSt
                         , VolatileState volatileState
                         , Default volatileState
                         , MonadLogger m
-                        , RPC.MonadRPC m
                         , P.Node m ~ node
-                        , RPC.Node m ~ node
                         , RequestVoteResponse resp
                         , Default resp
                         , Eq node

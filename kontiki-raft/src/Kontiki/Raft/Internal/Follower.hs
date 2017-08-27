@@ -8,7 +8,7 @@
 
 {-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
-module Kontiki.Raft.Follower (
+module Kontiki.Raft.Internal.Follower (
       convertToFollower
     , onRequestVoteRequest
     ) where
@@ -35,7 +35,7 @@ import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTer
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastApplied))
 
-import Kontiki.Raft.State (Role(Follower), State(F), SomeState(SomeState))
+import Kontiki.Raft.Internal.State (Role(Follower), State(F), SomeState(SomeState))
 
 convertToFollower :: ( MonadState (SomeState volatileState volatileLeaderState) m
                      , VolatileState volatileState

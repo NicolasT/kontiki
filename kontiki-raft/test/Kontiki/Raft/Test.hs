@@ -12,7 +12,8 @@ import Test.Hspec.Expectations (shouldBe)
 import Kontiki.Raft.Classes.State.Volatile (commitIndex, lastApplied)
 import Kontiki.Raft.Classes.Types (index0, term0)
 
-import Kontiki.Raft (SomeState, Role(Follower), initialState, initializePersistentState, role, volatileState)
+import Kontiki.Raft (SomeState, Role(Follower), initialState, initializePersistentState, role)
+import Kontiki.Raft.Internal.State (volatileState)
 
 import qualified Kontiki.Raft.Types as T
 

@@ -1,4 +1,4 @@
-module Kontiki.Raft.Leader (
+module Kontiki.Raft.Internal.Candidate (
       onRequestVoteRequest
     ) where
 

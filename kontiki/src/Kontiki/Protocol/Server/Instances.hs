@@ -6,8 +6,10 @@ module Kontiki.Protocol.Server.Instances () where
 
 import Control.Lens (lens)
 
+import Data.Default (Default(def))
+
 import Test.QuickCheck (Arbitrary, arbitrary)
-import Data.Text.Lazy (fromStrict)
+import qualified Data.Text.Lazy as Text
 import Data.Text.Arbitrary ()
 
 import qualified Kontiki.Raft.Classes.RPC as RPC
@@ -34,9 +36,12 @@ instance RVReq.RequestVoteRequest RequestVoteRequest where
 
 instance Arbitrary RequestVoteRequest where
     arbitrary = S.RequestVoteRequest <$> arbitrary
-                                     <*> (fromStrict <$> arbitrary)
+                                     <*> (Text.fromStrict <$> arbitrary)
                                      <*> arbitrary
                                      <*> arbitrary
+
+instance Default RequestVoteRequest where
+    def = S.RequestVoteRequest def (Text.empty) def def
 
 
 instance RPC.HasTerm RequestVoteResponse where
@@ -46,6 +51,9 @@ instance RPC.HasTerm RequestVoteResponse where
 
 instance RVResp.RequestVoteResponse RequestVoteResponse where
     voteGranted = lens S.requestVoteResponseVoteGranted (\r g -> r { S.requestVoteResponseVoteGranted = g })
+
+instance Default RequestVoteResponse where
+    def = S.RequestVoteResponse def False
 
 instance Arbitrary RequestVoteResponse where
     arbitrary = S.RequestVoteResponse <$> arbitrary

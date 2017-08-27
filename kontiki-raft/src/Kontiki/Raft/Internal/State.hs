@@ -5,7 +5,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Kontiki.Raft.State (
+module Kontiki.Raft.Internal.State (
       Role(..)
     , State(..)
     , SomeState(..)

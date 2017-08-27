@@ -39,18 +39,19 @@ Library
                  , mtl >= 2.2 && < 2.3
                  , kontiki-raft-classes
   Exposed-Modules: Kontiki.Raft
-  Other-Modules:   Kontiki.Raft.AllServers
-                 , Kontiki.Raft.Candidate
-                 , Kontiki.Raft.Follower
-                 , Kontiki.Raft.Leader
-                 , Kontiki.Raft.State
+                 , Kontiki.Raft.Internal.AllServers
+                 , Kontiki.Raft.Internal.Candidate
+                 , Kontiki.Raft.Internal.Follower
+                 , Kontiki.Raft.Internal.Leader
+                 , Kontiki.Raft.Internal.State
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
 
 Test-Suite kontiki-raft-test
   Type:            exitcode-stdio-1.0
   Main-Is:         Main.hs
-  Other-Modules:   Kontiki.Raft.Test
+  Other-Modules:   Kontiki.Raft.Internal.AllServers.Test
+                 , Kontiki.Raft.Test
                  , Kontiki.Raft.Types
   Build-Depends:   base >= 4.9 && < 4.10
                  , data-default >= 0.7 && < 0.8
