@@ -14,12 +14,12 @@ addons:
     - libleveldb-dev
 
 before_install:
-- export -f travis_retry
-- .travis/before_install.sh
+- export -a && for f in $(declare -F | awk '{ print $3; }'); do eval declare -f -x $f; done
 - export PATH=$HOME/.local/bin:$PATH
 
+- .travis/before_install.sh
+
 install:
-- export -f travis_wait
 - .travis/install.sh
 
 script:
