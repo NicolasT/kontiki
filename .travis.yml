@@ -14,6 +14,7 @@ addons:
     - libleveldb-dev
 
 before_install:
+- export -f travis_retry
 - .travis/before_install.sh
 - export PATH=$HOME/.local/bin:$PATH
 
