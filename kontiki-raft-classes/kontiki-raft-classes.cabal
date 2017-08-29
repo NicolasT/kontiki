@@ -48,6 +48,7 @@ Library
                  , Kontiki.Raft.Classes.State.Persistent
                  , Kontiki.Raft.Classes.State.Volatile
                  , Kontiki.Raft.Classes.Test
+                 , Kontiki.Raft.Classes.Timers
                  , Kontiki.Raft.Classes.Types
   Other-Modules:   Kontiki.Raft.Classes.Lens
                  , Kontiki.Raft.Classes.RPC.Test

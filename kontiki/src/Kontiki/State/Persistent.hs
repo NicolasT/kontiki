@@ -25,11 +25,12 @@ import Kontiki.Raft.Classes.State.Persistent
                           getCurrentTerm, setCurrentTerm,
                           getVotedFor, setVotedFor,
                           getLogEntry, setLogEntry))
+import Kontiki.Raft.Classes.Timers (MonadTimers)
 
 import qualified Kontiki.Types as T
 
 newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: ReaderT L.DB m a }
-    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger)
+    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadTimers)
 
 runPersistentStateT :: L.DB -> PersistentStateT m a -> m a
 runPersistentStateT db = flip runReaderT db . unPersistentStateT

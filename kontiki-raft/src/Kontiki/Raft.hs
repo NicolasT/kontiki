@@ -35,6 +35,7 @@ import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(setCurrentTer
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastApplied))
 import qualified Kontiki.Raft.Classes.State.Volatile as V
+import Kontiki.Raft.Classes.Timers (MonadTimers)
 import Kontiki.Raft.Classes.Types (Index(index0), Term (term0))
 
 import qualified Kontiki.Raft.Internal.AllServers as A
@@ -80,6 +81,7 @@ onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderSt
                         , RequestVoteResponse resp
                         , Default resp
                         , Eq node
+                        , MonadTimers m
                         )
                      => req
                      -> m resp

@@ -27,6 +27,7 @@ import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTer
 import Kontiki.Raft.Classes.State.Volatile (VolatileState)
 -- import qualified Kontiki.Raft.Classes.Types as T
 -- import Kontiki.Raft.Classes.Types (Index(succIndex))
+import Kontiki.Raft.Classes.Timers (MonadTimers)
 
 import Kontiki.Raft.Internal.Follower (convertToFollower)
 import Kontiki.Raft.Internal.State (SomeState)
@@ -61,6 +62,7 @@ checkTerm :: ( MonadState (SomeState volatileState volatileLeaderState) m
              , VolatileState volatileState
              , Default volatileState
              , MonadLogger m
+             , MonadTimers m
              )
           => msg
           -> m ()

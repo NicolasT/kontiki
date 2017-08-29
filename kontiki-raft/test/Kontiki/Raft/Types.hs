@@ -13,6 +13,8 @@ module Kontiki.Raft.Types (
     , PersistentState(..)
     , runPersistentStateT
     , VolatileState(..)
+    , TimersT(..)
+    , runTimersT
     ) where
 
 import Data.Typeable (Typeable)
@@ -21,6 +23,7 @@ import GHC.Generics (Generic)
 
 import Control.Monad.State.Class (gets, modify)
 import Control.Monad.Trans.State (StateT, runStateT)
+import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Control.Monad.Logger (MonadLogger)
 
 import Control.Lens (lens)
@@ -37,6 +40,7 @@ import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AEReq
 import qualified Kontiki.Raft.Classes.RPC.AppendEntriesResponse as AEResp
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import qualified Kontiki.Raft.Classes.State.Volatile as V
+import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer, cancelElectionTimer, startHeartbeatTimer))
 
 newtype Term = Term { getTerm :: Word64 }
     deriving (Show, Eq, Ord, Typeable, Generic)
@@ -189,7 +193,7 @@ instance Default PersistentState where
     def = PersistentState (Term 0) Nothing
 
 newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: StateT PersistentState m a }
-    deriving (Functor, Applicative, Monad, MonadLogger)
+    deriving (Functor, Applicative, Monad, MonadLogger, MonadTimers)
 
 instance Monad m => P.MonadPersistentState (PersistentStateT m) where
     type Term (PersistentStateT m) = Term
@@ -227,3 +231,20 @@ instance Default VolatileState where
 instance Arbitrary VolatileState where
     arbitrary = VolatileState <$> arbitrary
                               <*> arbitrary
+
+
+newtype TimersT m a = TimersT { unTimersT :: WriterT [TimerEvent] m a }
+    deriving (Functor, Applicative, Monad, MonadLogger)
+
+data TimerEvent = StartElectionTimer
+                | CancelElectionTimer
+                | StartHeartbeatTimer
+    deriving (Show, Eq)
+
+instance Monad m => MonadTimers (TimersT m) where
+    startElectionTimer = TimersT $ tell [StartElectionTimer]
+    cancelElectionTimer = TimersT $ tell [CancelElectionTimer]
+    startHeartbeatTimer = TimersT $ tell [StartHeartbeatTimer]
+
+runTimersT :: TimersT m a -> m (a, [TimerEvent])
+runTimersT = runWriterT . unTimersT

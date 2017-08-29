@@ -14,6 +14,7 @@ module Kontiki.Raft.Internal.Follower (
     ) where
 
 import Prelude hiding ((>>=), (>>), return)
+import qualified Prelude
 
 import Control.Monad (when)
 import Data.Maybe (isNothing)
@@ -36,18 +37,25 @@ import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTerm, getVotedFor, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastApplied))
+import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer))
 
 import Kontiki.Raft.Internal.State (Role(Follower), State(F), SomeState(SomeState))
 
-convertToFollower :: ( MonadState (SomeState volatileState volatileLeaderState) m
+convertToFollower :: ( Monad m
+                     , MonadState (SomeState volatileState volatileLeaderState) m
                      , VolatileState volatileState
                      , Default volatileState
+                     , MonadTimers m
                      )
                   => m ()
-convertToFollower = modify $ \case
-    SomeState s -> SomeState $ F $ def & commitIndex .~ s ^. commitIndex
-                                       & lastApplied .~ s ^. lastApplied
-
+convertToFollower = do
+    modify $ \case
+        SomeState s -> SomeState $ F $ def & commitIndex .~ s ^. commitIndex
+                                           & lastApplied .~ s ^. lastApplied
+    startElectionTimer
+  where
+    a >> b = (Prelude.>>) a b
+    return a = Prelude.return a
 
 onRequestVoteRequest :: forall m node req resp term vs vls.
                         ( IxMonadState m

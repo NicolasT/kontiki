@@ -25,7 +25,7 @@ tests = testSpec "Kontiki.Raft.Internal.AllServers" $ do
                 s0 = initialState :: SomeState T.VolatileState ()
                 msg = T.RequestVoteRequest (T.Term 10) def def def
 
-            (((), _), p) <- runNoLoggingT $ T.runPersistentStateT p0 $ flip runStateT s0 $ checkTerm msg
+            ((((), _), p), _) <- runNoLoggingT $ T.runTimersT $ T.runPersistentStateT p0 $ flip runStateT s0 $ checkTerm msg
             T.persistentStateCurrentTerm p `shouldBe` T.Term 10
 
         it "discards old terms" $ do
@@ -33,7 +33,7 @@ tests = testSpec "Kontiki.Raft.Internal.AllServers" $ do
                 s0 = S.SomeState (S.C def) :: SomeState T.VolatileState ()
                 msg = T.RequestVoteRequest (T.Term 5) def def def
 
-            (((), s), p) <- runNoLoggingT $ T.runPersistentStateT p0 $ flip runStateT s0 $ checkTerm msg
+            ((((), s), p), _) <- runNoLoggingT $ T.runTimersT $ T.runPersistentStateT p0 $ flip runStateT s0 $ checkTerm msg
             T.persistentStateCurrentTerm p `shouldBe` T.Term 10
             role s `shouldBe` Candidate
 
@@ -43,6 +43,5 @@ tests = testSpec "Kontiki.Raft.Internal.AllServers" $ do
                 msg = T.RequestVoteRequest (T.Term 10) def def def
 
             role s0 `shouldBe` Candidate
-            (((), s), _) <- runNoLoggingT $ T.runPersistentStateT p0 $ flip runStateT s0 $ checkTerm msg
+            ((((), s), _), _) <- runNoLoggingT $ T.runTimersT $ T.runPersistentStateT p0 $ flip runStateT s0 $ checkTerm msg
             role s `shouldBe` Follower
-
