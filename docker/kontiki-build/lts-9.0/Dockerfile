@@ -9,8 +9,10 @@ RUN apt-get update && \
 
 # The only GRPC packages for Ubuntu which are up-to-date are for Artful, in
 # Universe, and they're utterly broken.
-RUN mkdir -p /usr/src
-WORKDIR /usr/src
-RUN git clone --recurse-submodules --branch ${GRPC_TAG} https://github.com/grpc/grpc.git
-WORKDIR /usr/src/grpc
-RUN make -j2 prefix=/usr install_c
+RUN mkdir -p /usr/src && \
+    cd /usr/src && \
+    git clone --recurse-submodules --branch ${GRPC_TAG} https://github.com/grpc/grpc.git && \
+    cd grpc && \
+    make -j2 prefix=/usr install_c && \
+    cd .. && \
+    rm -rf grpc
