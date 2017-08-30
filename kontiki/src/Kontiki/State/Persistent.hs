@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.State.Persistent (
@@ -11,7 +10,7 @@ module Kontiki.State.Persistent (
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
-import Control.Monad.Logger (MonadLogger, logDebugSH)
+import Control.Monad.Logger (MonadLogger)
 
 import qualified Data.Binary as B
 
@@ -39,7 +38,7 @@ currentTermKey, votedForKey :: BS8.ByteString
 currentTermKey = BS8.pack "currentTerm"
 votedForKey = BS8.pack "votedFor"
 
-instance (Monad m, MonadIO m, MonadLogger m) => MonadPersistentState (PersistentStateT m) where
+instance (Monad m, MonadIO m) => MonadPersistentState (PersistentStateT m) where
     type Term (PersistentStateT m) = T.Term
     type Node (PersistentStateT m) = T.Node
     type Entry (PersistentStateT m) = ()
@@ -54,7 +53,7 @@ instance (Monad m, MonadIO m, MonadLogger m) => MonadPersistentState (Persistent
     getLogEntry = error "Not implemented"
     setLogEntry = error "Not implemented"
 
-doGet :: (B.Binary a, Show a, MonadIO m, MonadLogger m)
+doGet :: (B.Binary a, Show a, MonadIO m)
       => BS8.ByteString
       -> PersistentStateT m a
 doGet key = PersistentStateT $ do
@@ -63,14 +62,12 @@ doGet key = PersistentStateT $ do
         Nothing -> error $ "Database not properly initialized: key " ++ show key ++ " not found"
         Just v -> do
             let v' = B.decode (BS.fromStrict v)
-            -- $(logDebugSH) ("Get", key, v')
             return $! v'
 
-doPut :: (B.Binary a, Show a, MonadIO m, MonadLogger m)
+doPut :: (B.Binary a, Show a, MonadIO m)
       => BS8.ByteString
       -> a
       -> PersistentStateT m ()
 doPut key a = PersistentStateT $ do
     db <- ask
-    -- $(logDebugSH) ("Put", key, a)
     L.put db L.defaultWriteOptions key (BS.toStrict $ B.encode a)
