@@ -19,4 +19,4 @@ install:
 
 script:
 - stack -j 2 --no-terminal build --docker --test --pedantic
-- stack -j 2 --no-terminal sdist
+- stack -j 2 --no-terminal sdist --docker --test-tarball kontiki-raft-classes kontiki-raft kontiki
