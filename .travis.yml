@@ -10,11 +10,6 @@ cache:
   - $HOME/.stack
   - .stack-work/
 
-addons:
-  apt:
-    packages:
-    - libleveldb-dev
-
 before_install:
 - export PATH=$HOME/.local/bin:$PATH
 - .travis/before_install.sh
