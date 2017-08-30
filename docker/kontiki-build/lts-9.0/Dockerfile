@@ -13,4 +13,4 @@ RUN mkdir -p /usr/src
 WORKDIR /usr/src
 RUN git clone --recurse-submodules --branch ${GRPC_TAG} https://github.com/grpc/grpc.git
 WORKDIR /usr/src/grpc
-RUN make -j2 prefix=/usr/local install_c
+RUN make -j2 prefix=/usr install_c
