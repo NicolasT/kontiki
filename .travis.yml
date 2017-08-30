@@ -2,11 +2,13 @@ language: c
 sudo: false
 dist: trusty
 
+services:
+- docker
+
 cache:
   directories:
   - $HOME/.stack
   - .stack-work/
-  - $HOME/.local
 
 addons:
   apt:
@@ -15,12 +17,11 @@ addons:
 
 before_install:
 - export PATH=$HOME/.local/bin:$PATH
-- export LD_LIBRARY_PATH=$HOME/.local/lib:$LD_LIBRARY_PATH
 - .travis/before_install.sh
 
 install:
 - .travis/install.sh
 
 script:
-- stack -j 2 --no-terminal build --test --pedantic
+- stack -j 2 --no-terminal build --docker --test --pedantic
 - stack -j 2 --no-terminal sdist

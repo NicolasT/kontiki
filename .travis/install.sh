@@ -1,5 +1,6 @@
 #!/bin/bash -xue
 
-stack -j 2 --no-terminal setup
-stack -j 2 --no-terminal build --test --haddock --only-snapshot
-stack -j 2 --no-terminal build --haddock grpc-haskell
+stack --no-terminal docker pull
+stack -j 2 --no-terminal --docker setup
+stack -j 2 --no-terminal --docker build --test --haddock --only-snapshot
+stack -j 2 --no-terminal --docker build --haddock grpc-haskell
