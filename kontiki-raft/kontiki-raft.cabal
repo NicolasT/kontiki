@@ -45,7 +45,7 @@ Library
                  , Kontiki.Raft.Internal.Leader
                  , Kontiki.Raft.Internal.State
   Hs-Source-Dirs:  src
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
 
 Test-Suite kontiki-raft-test
   Type:            exitcode-stdio-1.0
@@ -66,4 +66,4 @@ Test-Suite kontiki-raft-test
                  , kontiki-raft
                  , kontiki-raft-classes
   Hs-Source-Dirs:  test
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N -g

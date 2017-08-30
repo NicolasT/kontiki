@@ -79,17 +79,6 @@ Executable kontiki
   Hs-Source-Dirs:  bin
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
 
-Executable kontiki-grpc-test
-  Build-Depends:   base >= 4.9 && < 4.10
-                 , data-default >= 0.7 && < 0.8
-                 , ekg
-                 , grpc-haskell >= 0.0 && < 0.1
-                 , network >= 2.6 && < 2.7
-                 , kontiki
-  Main-Is:         kontiki-grpc-test.hs
-  Hs-Source-Dirs:  bin
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
-
 Executable kontiki-client
   Build-Depends:   base >= 4.9 && < 4.10
                  , data-default >= 0.7 && < 0.8
@@ -97,7 +86,7 @@ Executable kontiki-client
                  , kontiki
   Main-Is:         kontiki-client.hs
   Hs-Source-Dirs:  bin
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g -threaded -rtsopts
 
 Test-Suite kontiki-test
   Type:            exitcode-stdio-1.0
@@ -125,4 +114,4 @@ Test-Suite kontiki-test
                  , kontiki-raft
                  , kontiki-raft-classes
   Hs-Source-Dirs:  test
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g -threaded -rtsopts -with-rtsopts=-N

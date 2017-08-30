@@ -25,6 +25,6 @@ main = do
     withGRPC $ \g -> withClient g cfg $ \c -> do
         Node{..} <- nodeClient c
         forever $ nodeRequestVote (ClientNormalRequest req 5 mempty) >>= \case
-            ClientNormalResponse resp _ _ StatusOk _ -> return () -- print resp
+            ClientNormalResponse _resp _ _ StatusOk _ -> return () -- print resp
             ClientNormalResponse _ _ _ st _ -> print st
             ClientError e -> print e

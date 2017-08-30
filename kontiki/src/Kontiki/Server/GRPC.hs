@@ -18,12 +18,7 @@ import qualified Control.Concurrent.MVar as MVar
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue (TQueue)
 import qualified Control.Concurrent.STM.TQueue as TQueue
-import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-
-import Data.Text (Text)
-
-import Control.Monad.Logger (logDebugSH)
 
 import System.Clock (Clock(Realtime), getTime, toNanoSecs)
 
@@ -85,7 +80,7 @@ handler stats logger server wrapper (ServerNormalRequest _meta req) = Logging.wi
         atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
         res <- MVar.takeMVar resBox
         return (ServerNormalResponse res mempty StatusOk "")
-    let (ServerNormalResponse res' _ _ _) = res
+    -- let (ServerNormalResponse res' _ _ _) = res
     -- $(logDebugSH) ("Response" :: Text, res')
     liftIO $ do
         end <- liftIO $ getTime Realtime

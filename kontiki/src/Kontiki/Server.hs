@@ -56,7 +56,7 @@ import qualified Data.Text as Text
 
 import qualified Data.ByteString.Char8 as BS8
 
-import Control.Monad.Logger (MonadLogger, logInfo, runNoLoggingT)
+import Control.Monad.Logger (MonadLogger, logInfo)
 
 import qualified Database.LevelDB.Base as DB
 
