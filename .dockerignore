@@ -1,0 +1,8 @@
+.stack-work/
+*.tix
+*.aux
+*.hp
+*.prof
+*.ps
+*.eventlog
+*~
