@@ -23,9 +23,9 @@ data Role = Follower
     deriving (Show, Eq)
 
 data State volatileState volatileLeaderState (r :: Role) where
-    F :: volatileState -> State volatileState volatileLeaderState 'Follower
-    C :: volatileState -> State volatileState volatileLeaderState 'Candidate
-    L :: volatileState -> volatileLeaderState -> State volatileState volatileLeaderState 'Leader
+    F :: !volatileState -> State volatileState volatileLeaderState 'Follower
+    C :: !volatileState -> State volatileState volatileLeaderState 'Candidate
+    L :: !volatileState -> !volatileLeaderState -> State volatileState volatileLeaderState 'Leader
 
 deriving instance (Show volatileState, Show volatileLeaderState) => Show (State volatileState volatileLeaderState r)
 deriving instance (Eq volatileState, Eq volatileLeaderState) => Eq (State volatileState volatileLeaderState r)
@@ -56,7 +56,7 @@ instance VolatileState volatileState => VolatileState (State volatileState volat
 
 
 data SomeState volatileState volatileLeaderState where
-    SomeState :: State volatileState volatileLeaderState r -> SomeState volatileState volatileLeaderState
+    SomeState :: !(State volatileState volatileLeaderState r) -> SomeState volatileState volatileLeaderState
 
 deriving instance (Show volatileState, Show volatileLeaderState) => Show (SomeState volatileState volatileLeaderState)
 instance (Eq volatileState, Eq volatileLeaderState) => Eq (SomeState volatileState volatileLeaderState) where

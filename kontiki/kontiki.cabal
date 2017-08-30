@@ -34,6 +34,7 @@ Library
   Build-Depends:   base >= 4.9 && < 4.10
                  , binary >= 0.8 && < 0.9
                  , bytestring >= 0.10 && < 0.11
+                 , clock >= 0.7 && < 0.8
                  , data-default >= 0.7 && < 0.8
                  , ekg >= 0.4 && < 0.5
                  , ekg-core >= 0.1 && < 0.2
@@ -43,10 +44,12 @@ Library
                  , lifted-base >= 0.2 && < 0.3
                  , monad-control >= 1.0 && < 1.1
                  , monad-logger >= 0.3 && < 0.4
+                 , network >= 2.6 && < 2.7
                  , proto3-suite >= 0.1 && < 0.2
                  , proto3-wire >= 1.0 && < 1.1
                  , QuickCheck >= 2.9 && < 2.10
                  , quickcheck-text >= 0.1 && < 0.2
+                 , stm >= 2.4 && < 2.5
                  , suspend >= 0.2 && < 0.3
                  , text >= 1.2 && < 1.3
                  , timers >= 0.2 && < 0.3
@@ -60,17 +63,30 @@ Library
                  , Kontiki.Protocol.Server.Instances
                  , Kontiki.Server
                  , Kontiki.Server.EKG
+                 , Kontiki.Server.GRPC
+                 , Kontiki.Server.Logging
                  , Kontiki.State.Persistent
                  , Kontiki.State.Volatile
                  , Kontiki.Timers
                  , Kontiki.Types
   Hs-Source-Dirs:  src
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
 
 Executable kontiki
   Build-Depends:   base >= 4.9 && < 4.10
                  , kontiki
   Main-Is:         kontiki.hs
+  Hs-Source-Dirs:  bin
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
+
+Executable kontiki-grpc-test
+  Build-Depends:   base >= 4.9 && < 4.10
+                 , data-default >= 0.7 && < 0.8
+                 , ekg
+                 , grpc-haskell >= 0.0 && < 0.1
+                 , network >= 2.6 && < 2.7
+                 , kontiki
+  Main-Is:         kontiki-grpc-test.hs
   Hs-Source-Dirs:  bin
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-T
 

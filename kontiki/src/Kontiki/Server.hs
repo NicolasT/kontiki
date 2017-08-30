@@ -1,14 +1,13 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Server (main) where
 
+{-
 import Control.Concurrent (Chan, MVar, forkIO, newChan, newMVar, readMVar)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Concurrent.MVar.Lifted (modifyMVar)
@@ -41,7 +40,42 @@ import Kontiki.State.Persistent (PersistentStateT, runPersistentStateT)
 import Kontiki.State.Volatile (VolatileState)
 import Kontiki.Timers (Timers, TimersT, newTimers, runTimersT)
 import Kontiki.Types (Node(Node, getNode), Index(getIndex), Term(getTerm))
+-}
 
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Monad (forever)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.State.Strict (runStateT)
+import Data.Monoid ((<>))
+
+import GHC.Conc.Sync (labelThread)
+
+import Network.Socket (withSocketsDo)
+
+import qualified Data.Text as Text
+
+import qualified Data.ByteString.Char8 as BS8
+
+import Control.Monad.Logger (MonadLogger, logInfo, runNoLoggingT)
+
+import qualified Database.LevelDB.Base as DB
+
+import qualified System.Remote.Monitoring as EKG
+
+import Control.Concurrent.Suspend (msDelay, sDelay)
+
+import qualified Kontiki.Raft as K
+
+import Kontiki.Protocol.Server.Instances ()
+import Kontiki.Server.Logging (Logger)
+import qualified Kontiki.Server.Logging as Logging
+import Kontiki.Server.GRPC (Server)
+import qualified Kontiki.Server.GRPC as GRPC
+import Kontiki.State.Persistent (runPersistentStateT)
+import Kontiki.State.Volatile (VolatileState)
+import Kontiki.Timers (Timers, newTimers, runTimersT)
+
+{-
 handleRequest :: ( Monad m
                  , MonadIO m
                  , MonadBaseControl IO m
@@ -105,3 +139,53 @@ main = do
                               , S.nodeAppendEntries = nodeAppendEntries
                               }
             liftIO $ S.nodeServer impl opts
+-}
+
+startEKG :: (MonadIO m, MonadLogger m) => m EKG.Server
+startEKG = do
+    let host = "localhost"
+        port = 8000
+
+    $(logInfo) $ "Running EKG at http://" <> Text.pack host <> ":" <> Text.pack (show port)
+    liftIO $ do
+        server <- EKG.forkServer (BS8.pack host) port
+        labelThread (EKG.serverThreadId server) "ekg"
+        return server
+
+
+handle :: Logger -> Timers -> Server -> IO ()
+handle logger timers server = DB.withDB "/tmp/kontiki-db" DB.defaultOptions { DB.createIfMissing = True } $ \db -> do
+    _ <- Logging.withLogger logger $ runTimersT timers $ runPersistentStateT db $ flip runStateT state0 $ do
+        GRPC.handleRequests handlers server
+    return ()
+  where
+    state0 :: K.SomeState VolatileState ()
+    state0 = K.initialState
+    handlers = GRPC.RequestHandler { onRequestVote = K.onRequestVoteRequest
+                                   , onAppendEntries = \_ -> return undefined
+                                   }
+
+main :: IO ()
+main = withSocketsDo $ do
+    logger <- Logging.mkLogger
+    _logThread <- Logging.spawn logger
+
+    Logging.withLogger logger $ do
+        $(logInfo) "Starting Kontiki"
+        ekg <- startEKG
+
+        server <- liftIO GRPC.mkServer
+
+
+        let electionDelay = return $ sDelay 1
+            onElectionTimeout = error "Not implemented"
+            heartbeatDelay = return $ msDelay 200
+            onHeartbeatTimeout = error "Not implemented"
+        timers <- liftIO $ newTimers (electionDelay, onElectionTimeout) (heartbeatDelay, onHeartbeatTimeout)
+
+        stats <- liftIO $ EKG.getDistribution "kontiki.node.rpc" ekg
+
+        _ <- liftIO $ forkIO $ handle logger timers server
+        _ <- liftIO $ forkIO $ GRPC.runServer stats logger server
+
+        liftIO $ forever $ threadDelay (1000 * 1000)

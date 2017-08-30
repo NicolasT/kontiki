@@ -18,6 +18,7 @@ module Kontiki.Raft.Classes.State.Persistent (
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT)
+import qualified Control.Monad.Trans.State.Strict as SStateT
 
 import Control.Monad.Indexed.State (IxStateT)
 import Control.Monad.Indexed.Trans (ilift)
@@ -56,6 +57,19 @@ instance (Monad m, MonadPersistentState m) => MonadPersistentState (StateT s m) 
     type Node (StateT s m) = Node m
     type Entry (StateT s m) = Entry m
     type Index (StateT s m) = Index m
+
+    getCurrentTerm = lift getCurrentTerm
+    setCurrentTerm = lift . setCurrentTerm
+    getVotedFor = lift getVotedFor
+    setVotedFor = lift . setVotedFor
+    getLogEntry = lift . getLogEntry
+    setLogEntry i t e = lift $ setLogEntry i t e
+
+instance (Monad m, MonadPersistentState m) => MonadPersistentState (SStateT.StateT s m) where
+    type Term (SStateT.StateT s m) = Term m
+    type Node (SStateT.StateT s m) = Node m
+    type Entry (SStateT.StateT s m) = Entry m
+    type Index (SStateT.StateT s m) = Index m
 
     getCurrentTerm = lift getCurrentTerm
     setCurrentTerm = lift . setCurrentTerm

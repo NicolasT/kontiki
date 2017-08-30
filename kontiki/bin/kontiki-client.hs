@@ -7,6 +7,8 @@
 
 module Main (main) where
 
+import Control.Monad (forever)
+
 import Network.GRPC.HighLevel.Client
 import Network.GRPC.HighLevel.Generated
 import Network.GRPC.LowLevel
@@ -22,7 +24,7 @@ main = do
         req = def { requestVoteRequestCandidateId = "kontiki-client", requestVoteRequestTerm = 10 }
     withGRPC $ \g -> withClient g cfg $ \c -> do
         Node{..} <- nodeClient c
-        nodeRequestVote (ClientNormalRequest req 5 mempty) >>= \case
-            ClientNormalResponse resp _ _ StatusOk _ -> print resp
+        forever $ nodeRequestVote (ClientNormalRequest req 5 mempty) >>= \case
+            ClientNormalResponse resp _ _ StatusOk _ -> return () -- print resp
             ClientNormalResponse _ _ _ st _ -> print st
             ClientError e -> print e

@@ -13,8 +13,8 @@ import qualified Kontiki.Raft.Classes.State.Volatile as K
 
 import Kontiki.Types (Index)
 
-data VolatileState = VolatileState { volatileStateCommitIndex :: Index
-                                   , volatileStateLastApplied :: Index
+data VolatileState = VolatileState { volatileStateCommitIndex :: {-# UNPACK #-} !Index
+                                   , volatileStateLastApplied :: {-# UNPACK #-} !Index
                                    }
     deriving (Eq, Show)
 

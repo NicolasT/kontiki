@@ -63,8 +63,8 @@ doGet key = PersistentStateT $ do
         Nothing -> error $ "Database not properly initialized: key " ++ show key ++ " not found"
         Just v -> do
             let v' = B.decode (BS.fromStrict v)
-            $(logDebugSH) ("Get", key, v')
-            return v'
+            -- $(logDebugSH) ("Get", key, v')
+            return $! v'
 
 doPut :: (B.Binary a, Show a, MonadIO m, MonadLogger m)
       => BS8.ByteString
@@ -72,5 +72,5 @@ doPut :: (B.Binary a, Show a, MonadIO m, MonadLogger m)
       -> PersistentStateT m ()
 doPut key a = PersistentStateT $ do
     db <- ask
-    $(logDebugSH) ("Put", key, a)
+    -- $(logDebugSH) ("Put", key, a)
     L.put db L.defaultWriteOptions key (BS.toStrict $ B.encode a)
