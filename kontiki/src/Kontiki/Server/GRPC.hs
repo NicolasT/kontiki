@@ -13,6 +13,7 @@ module Kontiki.Server.GRPC (
     , readRequest
     ) where
 
+import Control.Concurrent (myThreadId)
 import Control.Concurrent.MVar (MVar)
 import qualified Control.Concurrent.MVar as MVar
 import Control.Concurrent.STM (atomically)
@@ -28,6 +29,9 @@ import System.Metrics.Distribution (Distribution)
 import qualified System.Metrics.Distribution as Distribution
 
 import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), StatusCode(StatusOk), defaultServiceOptions)
+
+import Data.Text (Text)
+import Control.Monad.Logger (logDebugSH)
 
 import qualified Kontiki.Protocol.Server as Server
 import Kontiki.Server.Logging (Logger)
@@ -71,6 +75,8 @@ handler :: ( MonadIO m
         -> ServerRequest 'Normal req resp
         -> m (ServerResponse 'Normal resp)
 handler stats logger server wrapper (ServerNormalRequest _meta req) = Logging.withLogger logger $ do
+    tid <- liftIO myThreadId
+    $(logDebugSH) ("Thread" :: Text, tid)
     start <- liftIO $ getTime Realtime
     -- $(logDebugSH) ("Request" :: Text, req)
     res <- liftIO $ do

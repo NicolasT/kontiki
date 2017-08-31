@@ -1,5 +1,7 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.State.Persistent (
@@ -8,6 +10,7 @@ module Kontiki.State.Persistent (
     ) where
 
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Class (MonadTrans)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
 import Control.Monad.Logger (MonadLogger)
@@ -29,7 +32,9 @@ import Kontiki.Raft.Classes.Timers (MonadTimers)
 import qualified Kontiki.Types as T
 
 newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: ReaderT L.DB m a }
-    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadTimers)
+    deriving {- stock -} (Functor
+    {- deriving newtype ( -} , Applicative, Monad, MonadTrans, MonadIO
+    {- deriving anyclass ( -} , MonadLogger, MonadTimers)
 
 runPersistentStateT :: L.DB -> PersistentStateT m a -> m a
 runPersistentStateT db = flip runReaderT db . unPersistentStateT

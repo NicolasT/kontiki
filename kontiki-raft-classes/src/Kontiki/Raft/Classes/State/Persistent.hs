@@ -1,3 +1,4 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -16,7 +17,7 @@ module Kontiki.Raft.Classes.State.Persistent (
       MonadPersistentState(..)
     ) where
 
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Trans.State (StateT)
 import qualified Control.Monad.Trans.State.Strict as SStateT
 
@@ -36,20 +37,38 @@ class MonadPersistentState m where
     --
     -- Initialized to 0 on first boot, increases monotoniically.
     getCurrentTerm :: m (Term m)
+    default getCurrentTerm :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => m (Term m')
+    getCurrentTerm = lift getCurrentTerm
+    {-# INLINE getCurrentTerm #-}
     setCurrentTerm :: Term m -> m ()
+    default setCurrentTerm :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => Term m' -> m ()
+    setCurrentTerm = lift . setCurrentTerm
+    {-# INLINE setCurrentTerm #-}
 
     -- | Candidate that received vote in current term
     --
     -- None if none.
     getVotedFor :: m (Maybe (Node m))
+    default getVotedFor :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => m (Maybe (Node m'))
+    getVotedFor = lift getVotedFor
+    {-# INLINE getVotedFor #-}
     setVotedFor :: Maybe (Node m) -> m ()
+    default setVotedFor :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => Maybe (Node m') -> m ()
+    setVotedFor = lift . setVotedFor
+    {-# INLINE setVotedFor #-}
 
     -- | Log entries
     --
     -- Each entry contains command for state machine, and term when entry
     -- was received by leader. First index is 1.
     getLogEntry :: Index m -> m (Term m, Entry m)
+    default getLogEntry :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => Index m' -> m (Term m', Entry m')
+    getLogEntry = lift . getLogEntry
+    {-# INLINE getLogEntry #-}
     setLogEntry :: Index m -> Term m -> Entry m -> m ()
+    default setLogEntry :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => Index m' -> Term m' -> Entry m' -> m ()
+    setLogEntry i t e = lift $ setLogEntry i t e
+    {-# INLINE setLogEntry #-}
 
 
 instance (Monad m, MonadPersistentState m) => MonadPersistentState (StateT s m) where
@@ -58,25 +77,11 @@ instance (Monad m, MonadPersistentState m) => MonadPersistentState (StateT s m) 
     type Entry (StateT s m) = Entry m
     type Index (StateT s m) = Index m
 
-    getCurrentTerm = lift getCurrentTerm
-    setCurrentTerm = lift . setCurrentTerm
-    getVotedFor = lift getVotedFor
-    setVotedFor = lift . setVotedFor
-    getLogEntry = lift . getLogEntry
-    setLogEntry i t e = lift $ setLogEntry i t e
-
 instance (Monad m, MonadPersistentState m) => MonadPersistentState (SStateT.StateT s m) where
     type Term (SStateT.StateT s m) = Term m
     type Node (SStateT.StateT s m) = Node m
     type Entry (SStateT.StateT s m) = Entry m
     type Index (SStateT.StateT s m) = Index m
-
-    getCurrentTerm = lift getCurrentTerm
-    setCurrentTerm = lift . setCurrentTerm
-    getVotedFor = lift getVotedFor
-    setVotedFor = lift . setVotedFor
-    getLogEntry = lift . getLogEntry
-    setLogEntry i t e = lift $ setLogEntry i t e
 
 instance (Monad m, MonadPersistentState m) => MonadPersistentState (IxStateT m i i) where
     type Term (IxStateT m i i) = Term m

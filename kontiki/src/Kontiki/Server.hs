@@ -7,7 +7,7 @@
 
 module Kontiki.Server (main) where
 
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (threadDelay, myThreadId)
 import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
@@ -19,13 +19,18 @@ import GHC.Conc.Sync (labelThread)
 
 import Control.Concurrent.STM (atomically)
 
+import Control.Concurrent.Async.Lifted.Safe (withAsync)
+
 import Network.Socket (withSocketsDo)
 
+import Control.Exception.Safe (MonadMask, SomeException, finally, withException)
+
+import Data.Text (Text)
 import qualified Data.Text as Text
 
 import qualified Data.ByteString.Char8 as BS8
 
-import Control.Monad.Logger (MonadLogger, logInfo)
+import Control.Monad.Logger (MonadLogger, logInfo, logInfoSH)
 
 import qualified Database.LevelDB.Base as DB
 
@@ -128,11 +133,13 @@ data Event m = RPC (GRPC.RequestHandler m -> m ()) | Timeout (Timers.TimeoutHand
 handle :: Logger -> Timers -> Server -> IO ()
 handle logger timers server = DB.withDB "/tmp/kontiki-db" DB.defaultOptions { DB.createIfMissing = True } $ \db -> do
     _ <- Logging.withLogger logger $ runTimersT timers $ runPersistentStateT db $ flip runStateT state0 $ do
-        event <- liftIO $ atomically $  (Timeout <$> Timers.readTimeout timers)
-                                    <|> (RPC <$> GRPC.readRequest server)
-        case event of
-            RPC fn -> fn rpcHandlers
-            Timeout fn -> fn timeoutHandlers
+        -- K.initializePersistentState
+        forever $ do
+            event <- liftIO $ atomically $  (Timeout <$> Timers.readTimeout timers)
+                                        <|> (RPC <$> GRPC.readRequest server)
+            case event of
+                RPC fn -> fn rpcHandlers
+                Timeout fn -> fn timeoutHandlers
     return ()
   where
     state0 :: K.SomeState VolatileState ()
@@ -155,14 +162,26 @@ main = withSocketsDo $ do
 
         server <- liftIO GRPC.mkServer
 
-
         let electionDelay = return $ sDelay 1
             heartbeatDelay = return $ msDelay 200
         timers <- liftIO $ newTimers electionDelay heartbeatDelay
 
         stats <- liftIO $ EKG.getDistribution "kontiki.node.rpc" ekg
 
-        _ <- liftIO $ forkIO $ handle logger timers server
-        _ <- liftIO $ forkIO $ GRPC.runServer stats logger server
+        let serverMain :: (MonadLogger m, MonadIO m, MonadMask m) => m ()
+            serverMain = (liftIO $ GRPC.runServer stats logger server) `finally` $(logInfo) "GRPC server shut down"
+            handlerMain :: (MonadLogger m, MonadIO m, MonadMask m) => m ()
+            handlerMain = (liftIO $ handle logger timers server) `withException` (\exc -> $(logInfoSH) ("Exception in handler" :: Text, (exc :: SomeException)))
+                                                                 `finally` $(logInfo) "Handler loop shut down"
+            demo :: (MonadLogger m, MonadIO m, MonadMask m) => m ()
+            demo = flip finally ($(logInfo) "Demo shut down") $ do
+                $(logInfo) "Starting"
+                liftIO $ print =<< myThreadId
+                $(logInfo) "Stopping"
 
-        liftIO $ forever $ threadDelay (1000 * 1000)
+        liftIO $ print =<< myThreadId
+
+        withAsync serverMain $ \_ ->
+            withAsync handlerMain $ \_ ->
+                withAsync demo $ \_ ->
+                    liftIO $ forever $ threadDelay (1000 * 1000)

@@ -41,6 +41,7 @@ Library
                  , grpc-haskell >= 0.0 && < 0.1
                  , lens >= 4.15 && < 4.16
                  , leveldb-haskell >= 0.6 && < 0.7
+                 , lifted-async >= 0.9 && < 0.10
                  , lifted-base >= 0.2 && < 0.3
                  , monad-control >= 1.0 && < 1.1
                  , monad-logger >= 0.3 && < 0.4
@@ -49,6 +50,7 @@ Library
                  , proto3-wire >= 1.0 && < 1.1
                  , QuickCheck >= 2.9 && < 2.10
                  , quickcheck-text >= 0.1 && < 0.2
+                 , safe-exceptions >= 0.1 && < 0.2
                  , stm >= 2.4 && < 2.5
                  , suspend >= 0.2 && < 0.3
                  , text >= 1.2 && < 1.3
