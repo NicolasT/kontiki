@@ -10,7 +10,7 @@ module Kontiki.Server.GRPC (
     , mkServer
     , runServer
     , RequestHandler(..)
-    , handleRequests
+    , readRequest
     ) where
 
 import Control.Concurrent.MVar (MVar)
@@ -19,6 +19,8 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TQueue (TQueue)
 import qualified Control.Concurrent.STM.TQueue as TQueue
 import Control.Monad.IO.Class (MonadIO, liftIO)
+
+import Control.Concurrent.STM (STM)
 
 import System.Clock (Clock(Realtime), getTime, toNanoSecs)
 
@@ -38,16 +40,12 @@ data RequestHandler m = RequestHandler { onRequestVote :: Server.RequestVoteRequ
                                        , onAppendEntries :: Server.AppendEntriesRequest -> m Server.AppendEntriesResponse
                                        }
 
-handleRequests :: (Monad m, MonadIO m) => RequestHandler m -> Server -> m ()
-handleRequests RequestHandler{..} Server{..} = handleOne
-  where
-    -- Note: Don't try to be 'smart'. Turning this recursive loop into
-    -- something using 'Control.Monad.forever' introduces a massive space leak
-    handleOne = do
-        liftIO (atomically $ TQueue.readTQueue serverQueue) >>= \case
-            RequestVote req mvar -> onRequestVote req >>= liftIO . MVar.putMVar mvar
-            AppendEntries req mvar -> onAppendEntries req >>= liftIO . MVar.putMVar mvar
-        handleOne
+readRequest :: (Monad m, MonadIO m) => Server -> STM (RequestHandler m -> m ())
+readRequest Server{..} = do
+    req <- TQueue.readTQueue serverQueue
+    return $ \RequestHandler{..} -> case req of
+        RequestVote req' mvar -> onRequestVote req' >>= liftIO . MVar.putMVar mvar
+        AppendEntries req' mvar -> onAppendEntries req' >>= liftIO . MVar.putMVar mvar
 
 newtype Server = Server { serverQueue :: TQueue Request }
 

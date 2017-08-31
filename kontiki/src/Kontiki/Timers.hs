@@ -1,10 +1,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Kontiki.Timers (
       TimersT
     , runTimersT
     , Timers
     , newTimers
+    , TimeoutHandler(..)
+    , readTimeout
     ) where
 
 import Control.Monad (void)
@@ -12,6 +15,10 @@ import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger)
+
+import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM.TQueue (TQueue)
+import qualified Control.Concurrent.STM.TQueue as TQueue
 
 import Control.Concurrent.Suspend (Delay)
 import Control.Concurrent.Timer (TimerIO, newTimer, oneShotStart, stopTimer)
@@ -25,26 +32,45 @@ instance (Monad m, MonadIO m) => MonadTimers (TimersT m) where
     startElectionTimer = TimersT $ do
         ts <- ask
         d <- liftIO $ timersMkElectionTimeout ts
-        void $ liftIO $ oneShotStart (timersElectionTimer ts) (timersOnElectionTimeout ts) d
+        void $ liftIO $ oneShotStart (timersElectionTimer ts) (atomically $ TQueue.writeTQueue (timersQueue ts) ElectionTimeout) d
     cancelElectionTimer = TimersT $ do
         ts <- ask
         liftIO $ stopTimer $ timersElectionTimer ts
     startHeartbeatTimer = TimersT $ do
         ts <- ask
         d <- liftIO $ timersMkHeartbeatTimeout ts
-        void $ liftIO $ oneShotStart (timersHeartbeatTimer ts) (timersOnHeartbeatTimeout ts) d
+        void $ liftIO $ oneShotStart (timersHeartbeatTimer ts) (atomically $ TQueue.writeTQueue (timersQueue ts) HeartbeatTimeout) d
 
-data Timers = Timers { timersMkElectionTimeout :: IO Delay
-                     , timersOnElectionTimeout :: IO ()
+
+data Timeout = ElectionTimeout
+             | HeartbeatTimeout
+    deriving (Show, Eq)
+
+data TimeoutHandler m = TimeoutHandler { onElectionTimeout :: m ()
+                                       , onHeartbeatTimeout :: m ()
+                                       }
+
+readTimeout :: Timers -> STM (TimeoutHandler m -> m ())
+readTimeout Timers{..} = do
+    t <- TQueue.readTQueue timersQueue
+    return $ \TimeoutHandler{..} -> case t of
+        ElectionTimeout -> onElectionTimeout
+        HeartbeatTimeout -> onHeartbeatTimeout
+
+data Timers = Timers { timersQueue :: TQueue Timeout
+                     , timersMkElectionTimeout :: IO Delay
                      , timersMkHeartbeatTimeout :: IO Delay
-                     , timersOnHeartbeatTimeout :: IO ()
                      , timersElectionTimer :: TimerIO
                      , timersHeartbeatTimer :: TimerIO
                      }
 
-newTimers :: (IO Delay, IO ()) -> (IO Delay, IO ()) -> IO Timers
-newTimers (mkElectionTimeout, onElectionTimeout) (mkHeartbeatTimeout, onHeartbeatTimeout) =
-    Timers mkElectionTimeout onElectionTimeout mkHeartbeatTimeout onHeartbeatTimeout <$> newTimer <*> newTimer
+newTimers :: IO Delay -> IO Delay -> IO Timers
+newTimers mkElectionTimeout mkHeartbeatTimeout =
+    Timers <$> TQueue.newTQueueIO
+           <*> pure mkElectionTimeout
+           <*> pure mkHeartbeatTimeout
+           <*> newTimer
+           <*> newTimer
 
 runTimersT :: Timers -> TimersT m a -> m a
 runTimersT ts = flip runReaderT ts . unTimersT

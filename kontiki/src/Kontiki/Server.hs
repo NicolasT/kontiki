@@ -7,48 +7,17 @@
 
 module Kontiki.Server (main) where
 
-{-
-import Control.Concurrent (Chan, MVar, forkIO, newChan, newMVar, readMVar)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Concurrent.MVar.Lifted (modifyMVar)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-
-import Control.Monad.Trans.State (StateT, runStateT)
-import Control.Monad.Logger (Loc, LogLevel, LogSource, LogStr, LoggingT, MonadLogger, logDebugSH, logInfo, logInfoSH, unChanLoggingT, runChanLoggingT, runNoLoggingT, runStderrLoggingT)
-
-import Data.Text (Text)
-
-import Control.Lens (view)
-
-import Database.LevelDB.Base (DB)
-import qualified Database.LevelDB.Base as DB
-
-import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), StatusCode(StatusOk), defaultServiceOptions)
-
-import qualified System.Remote.Monitoring as EKG (forkServer, serverMetricStore)
-
-import Control.Concurrent.Suspend (msDelay, sDelay)
-
-import qualified Kontiki.Raft as K
-import qualified Kontiki.Raft.Classes.State.Persistent as K
-import qualified Kontiki.Raft.Classes.State.Volatile as K
-
-import qualified Kontiki.Protocol.Server as S
-import Kontiki.Protocol.Server.Instances ()
-import qualified Kontiki.Server.EKG  as EKG (registerStats)
-import Kontiki.State.Persistent (PersistentStateT, runPersistentStateT)
-import Kontiki.State.Volatile (VolatileState)
-import Kontiki.Timers (Timers, TimersT, newTimers, runTimersT)
-import Kontiki.Types (Node(Node, getNode), Index(getIndex), Term(getTerm))
--}
-
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
 import Data.Monoid ((<>))
 
+import Control.Applicative ((<|>))
+
 import GHC.Conc.Sync (labelThread)
+
+import Control.Concurrent.STM (atomically)
 
 import Network.Socket (withSocketsDo)
 
@@ -74,6 +43,7 @@ import qualified Kontiki.Server.GRPC as GRPC
 import Kontiki.State.Persistent (runPersistentStateT)
 import Kontiki.State.Volatile (VolatileState)
 import Kontiki.Timers (Timers, newTimers, runTimersT)
+import qualified Kontiki.Timers as Timers
 
 {-
 handleRequest :: ( Monad m
@@ -153,17 +123,26 @@ startEKG = do
         return server
 
 
+data Event m = RPC (GRPC.RequestHandler m -> m ()) | Timeout (Timers.TimeoutHandler m -> m ())
+
 handle :: Logger -> Timers -> Server -> IO ()
 handle logger timers server = DB.withDB "/tmp/kontiki-db" DB.defaultOptions { DB.createIfMissing = True } $ \db -> do
     _ <- Logging.withLogger logger $ runTimersT timers $ runPersistentStateT db $ flip runStateT state0 $ do
-        GRPC.handleRequests handlers server
+        event <- liftIO $ atomically $  (Timeout <$> Timers.readTimeout timers)
+                                    <|> (RPC <$> GRPC.readRequest server)
+        case event of
+            RPC fn -> fn rpcHandlers
+            Timeout fn -> fn timeoutHandlers
     return ()
   where
     state0 :: K.SomeState VolatileState ()
     state0 = K.initialState
-    handlers = GRPC.RequestHandler { onRequestVote = K.onRequestVoteRequest
-                                   , onAppendEntries = \_ -> return undefined
-                                   }
+    rpcHandlers = GRPC.RequestHandler { onRequestVote = K.onRequestVoteRequest
+                                      , onAppendEntries = \_ -> return undefined
+                                      }
+    timeoutHandlers = Timers.TimeoutHandler { onElectionTimeout = return ()
+                                            , onHeartbeatTimeout = return ()
+                                            }
 
 main :: IO ()
 main = withSocketsDo $ do
@@ -178,10 +157,8 @@ main = withSocketsDo $ do
 
 
         let electionDelay = return $ sDelay 1
-            onElectionTimeout = error "Not implemented"
             heartbeatDelay = return $ msDelay 200
-            onHeartbeatTimeout = error "Not implemented"
-        timers <- liftIO $ newTimers (electionDelay, onElectionTimeout) (heartbeatDelay, onHeartbeatTimeout)
+        timers <- liftIO $ newTimers electionDelay heartbeatDelay
 
         stats <- liftIO $ EKG.getDistribution "kontiki.node.rpc" ekg
 
