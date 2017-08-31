@@ -78,14 +78,11 @@ handler stats logger server wrapper (ServerNormalRequest _meta req) = Logging.wi
     tid <- liftIO myThreadId
     $(logDebugSH) ("Thread" :: Text, tid)
     start <- liftIO $ getTime Realtime
-    -- $(logDebugSH) ("Request" :: Text, req)
     res <- liftIO $ do
         resBox <- MVar.newEmptyMVar
         atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
         res <- MVar.takeMVar resBox
         return (ServerNormalResponse res mempty StatusOk "")
-    -- let (ServerNormalResponse res' _ _ _) = res
-    -- $(logDebugSH) ("Response" :: Text, res')
     liftIO $ do
         end <- liftIO $ getTime Realtime
         let diff = toNanoSecs end - toNanoSecs start
