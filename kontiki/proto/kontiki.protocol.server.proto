@@ -6,28 +6,40 @@ service Node {
         rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse) {}
 }
 
-message RequestVoteRequest {
+message Term {
         uint64 term = 1;
-        string candidateId = 2;
-        uint64 lastLogIndex = 3;
-        uint64 lastLogTerm = 4;
+}
+
+message NodeId {
+        string node = 1;
+}
+
+message Index {
+        uint64 index = 1;
+}
+
+message RequestVoteRequest {
+        Term term = 1;
+        NodeId candidateId = 2;
+        Index lastLogIndex = 3;
+        Term lastLogTerm = 4;
 }
 
 message RequestVoteResponse {
-        uint64 term = 1;
+        Term term = 1;
         bool voteGranted = 2;
 }
 
 message AppendEntriesRequest {
-        uint64 term = 1;
-        string leaderId = 2;
-        uint64 prevLogIndex = 3;
-        uint64 prevLogTerm = 4;
+        Term term = 1;
+        NodeId leaderId = 2;
+        Index prevLogIndex = 3;
+        Term prevLogTerm = 4;
         repeated bytes entries = 5;
-        uint64 leaderCommit = 6;
+        Index leaderCommit = 6;
 }
 
 message AppendEntriesResponse {
-        uint64 term = 1;
+        Term term = 1;
         bool success = 2;
 }

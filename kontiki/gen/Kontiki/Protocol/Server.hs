@@ -83,11 +83,80 @@ nodeClient client
          (HsGRPC.clientRegisterMethod client
             (HsGRPC.MethodName "/kontiki.Node/AppendEntries")))
  
+data Term = Term{termTerm :: Hs.Word64}
+          deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
+ 
+instance HsProtobuf.Named Term where
+        nameOf _ = (Hs.fromString "Term")
+ 
+instance HsProtobuf.Message Term where
+        encodeMessage _ Term{termTerm = termTerm}
+          = (Hs.mconcat
+               [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
+                   termTerm)])
+        decodeMessage _
+          = (Hs.pure Term) <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 1))
+        dotProto _
+          = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "term")
+                []
+                Hs.Nothing)]
+ 
+data NodeId = NodeId{nodeIdNode :: Hs.Text}
+            deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
+ 
+instance HsProtobuf.Named NodeId where
+        nameOf _ = (Hs.fromString "NodeId")
+ 
+instance HsProtobuf.Message NodeId where
+        encodeMessage _ NodeId{nodeIdNode = nodeIdNode}
+          = (Hs.mconcat
+               [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
+                   nodeIdNode)])
+        decodeMessage _
+          = (Hs.pure NodeId) <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 1))
+        dotProto _
+          = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
+                (HsProtobuf.Prim HsProtobuf.String)
+                (HsProtobuf.Single "node")
+                []
+                Hs.Nothing)]
+ 
+data Index = Index{indexIndex :: Hs.Word64}
+           deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
+ 
+instance HsProtobuf.Named Index where
+        nameOf _ = (Hs.fromString "Index")
+ 
+instance HsProtobuf.Message Index where
+        encodeMessage _ Index{indexIndex = indexIndex}
+          = (Hs.mconcat
+               [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
+                   indexIndex)])
+        decodeMessage _
+          = (Hs.pure Index) <*>
+              (HsProtobuf.at HsProtobuf.decodeMessageField
+                 (HsProtobuf.FieldNumber 1))
+        dotProto _
+          = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
+                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Single "index")
+                []
+                Hs.Nothing)]
+ 
 data RequestVoteRequest = RequestVoteRequest{requestVoteRequestTerm
-                                             :: Hs.Word64,
-                                             requestVoteRequestCandidateId :: Hs.Text,
-                                             requestVoteRequestLastLogIndex :: Hs.Word64,
-                                             requestVoteRequestLastLogTerm :: Hs.Word64}
+                                             :: Hs.Maybe Kontiki.Protocol.Server.Term,
+                                             requestVoteRequestCandidateId ::
+                                             Hs.Maybe Kontiki.Protocol.Server.NodeId,
+                                             requestVoteRequestLastLogIndex ::
+                                             Hs.Maybe Kontiki.Protocol.Server.Index,
+                                             requestVoteRequestLastLogTerm ::
+                                             Hs.Maybe Kontiki.Protocol.Server.Term}
                         deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
  
 instance HsProtobuf.Named RequestVoteRequest where
@@ -101,50 +170,54 @@ instance HsProtobuf.Message RequestVoteRequest where
                              requestVoteRequestLastLogTerm = requestVoteRequestLastLogTerm}
           = (Hs.mconcat
                [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
-                   requestVoteRequestTerm),
+                   (HsProtobuf.Nested requestVoteRequestTerm)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 2)
-                   requestVoteRequestCandidateId),
+                   (HsProtobuf.Nested requestVoteRequestCandidateId)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 3)
-                   requestVoteRequestLastLogIndex),
+                   (HsProtobuf.Nested requestVoteRequestLastLogIndex)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 4)
-                   requestVoteRequestLastLogTerm)])
+                   (HsProtobuf.Nested requestVoteRequestLastLogTerm))])
         decodeMessage _
           = (Hs.pure RequestVoteRequest) <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 1))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 1)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 2))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 2)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 3))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 3)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 4))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 4)))
         dotProto _
           = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Term")))
                 (HsProtobuf.Single "term")
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 2)
-                (HsProtobuf.Prim HsProtobuf.String)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "NodeId")))
                 (HsProtobuf.Single "candidateId")
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 3)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Index")))
                 (HsProtobuf.Single "lastLogIndex")
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 4)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Term")))
                 (HsProtobuf.Single "lastLogTerm")
                 []
                 Hs.Nothing)]
  
 data RequestVoteResponse = RequestVoteResponse{requestVoteResponseTerm
-                                               :: Hs.Word64,
+                                               :: Hs.Maybe Kontiki.Protocol.Server.Term,
                                                requestVoteResponseVoteGranted :: Hs.Bool}
                          deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
  
@@ -158,19 +231,20 @@ instance HsProtobuf.Message RequestVoteResponse where
                               requestVoteResponseVoteGranted = requestVoteResponseVoteGranted}
           = (Hs.mconcat
                [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
-                   requestVoteResponseTerm),
+                   (HsProtobuf.Nested requestVoteResponseTerm)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 2)
                    requestVoteResponseVoteGranted)])
         decodeMessage _
           = (Hs.pure RequestVoteResponse) <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 1))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 1)))
               <*>
               (HsProtobuf.at HsProtobuf.decodeMessageField
                  (HsProtobuf.FieldNumber 2))
         dotProto _
           = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Term")))
                 (HsProtobuf.Single "term")
                 []
                 Hs.Nothing),
@@ -181,13 +255,17 @@ instance HsProtobuf.Message RequestVoteResponse where
                 Hs.Nothing)]
  
 data AppendEntriesRequest = AppendEntriesRequest{appendEntriesRequestTerm
-                                                 :: Hs.Word64,
-                                                 appendEntriesRequestLeaderId :: Hs.Text,
-                                                 appendEntriesRequestPrevLogIndex :: Hs.Word64,
-                                                 appendEntriesRequestPrevLogTerm :: Hs.Word64,
+                                                 :: Hs.Maybe Kontiki.Protocol.Server.Term,
+                                                 appendEntriesRequestLeaderId ::
+                                                 Hs.Maybe Kontiki.Protocol.Server.NodeId,
+                                                 appendEntriesRequestPrevLogIndex ::
+                                                 Hs.Maybe Kontiki.Protocol.Server.Index,
+                                                 appendEntriesRequestPrevLogTerm ::
+                                                 Hs.Maybe Kontiki.Protocol.Server.Term,
                                                  appendEntriesRequestEntries ::
                                                  Hs.Vector Hs.ByteString,
-                                                 appendEntriesRequestLeaderCommit :: Hs.Word64}
+                                                 appendEntriesRequestLeaderCommit ::
+                                                 Hs.Maybe Kontiki.Protocol.Server.Index}
                           deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
  
 instance HsProtobuf.Named AppendEntriesRequest where
@@ -206,55 +284,60 @@ instance HsProtobuf.Message AppendEntriesRequest where
                                  appendEntriesRequestLeaderCommit}
           = (Hs.mconcat
                [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
-                   appendEntriesRequestTerm),
+                   (HsProtobuf.Nested appendEntriesRequestTerm)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 2)
-                   appendEntriesRequestLeaderId),
+                   (HsProtobuf.Nested appendEntriesRequestLeaderId)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 3)
-                   appendEntriesRequestPrevLogIndex),
+                   (HsProtobuf.Nested appendEntriesRequestPrevLogIndex)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 4)
-                   appendEntriesRequestPrevLogTerm),
+                   (HsProtobuf.Nested appendEntriesRequestPrevLogTerm)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 5)
                    (HsProtobuf.UnpackedVec appendEntriesRequestEntries)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 6)
-                   appendEntriesRequestLeaderCommit)])
+                   (HsProtobuf.Nested appendEntriesRequestLeaderCommit))])
         decodeMessage _
           = (Hs.pure AppendEntriesRequest) <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 1))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 1)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 2))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 2)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 3))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 3)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 4))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 4)))
               <*>
               ((Hs.pure HsProtobuf.unpackedvec) <*>
                  (HsProtobuf.at HsProtobuf.decodeMessageField
                     (HsProtobuf.FieldNumber 5)))
               <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 6))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 6)))
         dotProto _
           = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Term")))
                 (HsProtobuf.Single "term")
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 2)
-                (HsProtobuf.Prim HsProtobuf.String)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "NodeId")))
                 (HsProtobuf.Single "leaderId")
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 3)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Index")))
                 (HsProtobuf.Single "prevLogIndex")
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 4)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Term")))
                 (HsProtobuf.Single "prevLogTerm")
                 []
                 Hs.Nothing),
@@ -264,13 +347,13 @@ instance HsProtobuf.Message AppendEntriesRequest where
                 []
                 Hs.Nothing),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 6)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Index")))
                 (HsProtobuf.Single "leaderCommit")
                 []
                 Hs.Nothing)]
  
 data AppendEntriesResponse = AppendEntriesResponse{appendEntriesResponseTerm
-                                                   :: Hs.Word64,
+                                                   :: Hs.Maybe Kontiki.Protocol.Server.Term,
                                                    appendEntriesResponseSuccess :: Hs.Bool}
                            deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
  
@@ -284,19 +367,20 @@ instance HsProtobuf.Message AppendEntriesResponse where
                                 appendEntriesResponseSuccess = appendEntriesResponseSuccess}
           = (Hs.mconcat
                [(HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 1)
-                   appendEntriesResponseTerm),
+                   (HsProtobuf.Nested appendEntriesResponseTerm)),
                 (HsProtobuf.encodeMessageField (HsProtobuf.FieldNumber 2)
                    appendEntriesResponseSuccess)])
         decodeMessage _
           = (Hs.pure AppendEntriesResponse) <*>
-              (HsProtobuf.at HsProtobuf.decodeMessageField
-                 (HsProtobuf.FieldNumber 1))
+              ((Hs.pure HsProtobuf.nested) <*>
+                 (HsProtobuf.at HsProtobuf.decodeMessageField
+                    (HsProtobuf.FieldNumber 1)))
               <*>
               (HsProtobuf.at HsProtobuf.decodeMessageField
                  (HsProtobuf.FieldNumber 2))
         dotProto _
           = [(HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 1)
-                (HsProtobuf.Prim HsProtobuf.UInt64)
+                (HsProtobuf.Prim (HsProtobuf.Named (HsProtobuf.Single "Term")))
                 (HsProtobuf.Single "term")
                 []
                 Hs.Nothing),

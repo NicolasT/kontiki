@@ -29,7 +29,7 @@ import Kontiki.Raft.Classes.State.Persistent
                           getLogEntry, setLogEntry))
 import Kontiki.Raft.Classes.Timers (MonadTimers)
 
-import qualified Kontiki.Types as T
+import qualified Kontiki.Protocol.Server as S
 
 newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: ReaderT L.DB m a }
     deriving {- stock -} (Functor
@@ -44,10 +44,10 @@ currentTermKey = BS8.pack "currentTerm"
 votedForKey = BS8.pack "votedFor"
 
 instance (Monad m, MonadIO m) => MonadPersistentState (PersistentStateT m) where
-    type Term (PersistentStateT m) = T.Term
-    type Node (PersistentStateT m) = T.Node
+    type Term (PersistentStateT m) = S.Term
+    type Node (PersistentStateT m) = S.Node
     type Entry (PersistentStateT m) = ()
-    type Index (PersistentStateT m) = T.Index
+    type Index (PersistentStateT m) = S.Index
 
     getCurrentTerm = doGet currentTermKey
     setCurrentTerm = doPut currentTermKey

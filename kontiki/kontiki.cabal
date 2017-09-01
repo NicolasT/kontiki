@@ -60,9 +60,7 @@ Library
                  , vector >= 0.12 && < 0.13
                  , kontiki-raft
                  , kontiki-raft-classes
-  Exposed-Modules: Kontiki.Protocol.Server
-                 , Kontiki.Protocol.Server.AppendEntriesRequest
-                 , Kontiki.Protocol.Server.Instances
+  Exposed-Modules: Kontiki.Protocol.Types
                  , Kontiki.Server
                  , Kontiki.Server.EKG
                  , Kontiki.Server.GRPC
@@ -71,7 +69,6 @@ Library
                  , Kontiki.State.Persistent
                  , Kontiki.State.Volatile
                  , Kontiki.Timers
-                 , Kontiki.Types
   Hs-Source-Dirs:  src
                  , gen
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g

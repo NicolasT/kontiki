@@ -24,8 +24,12 @@ import Data.Text.Arbitrary ()
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AEReq
 
-import Kontiki.Types (Term(Term, getTerm), Index(Index, getIndex), Node(Node, getNode))
+import Kontiki.Protocol.Server (Term(Term), Index(Index), NodeId(NodeId))
 import qualified Kontiki.Protocol.Server as S
+
+getTerm = S.termTerm
+getIndex = S.indexIndex
+getNode = S.nodeIdNode
 
 newtype AppendEntriesRequest e = AppendEntriesRequest { getAppendEntriesRequest :: S.AppendEntriesRequest }
     deriving (Show, Eq, Typeable)
@@ -38,12 +42,12 @@ instance RPC.HasTerm (AppendEntriesRequest e) where
         (\(AppendEntriesRequest r) t -> AppendEntriesRequest r { S.appendEntriesRequestTerm = getTerm t })
 
 instance Binary e => AEReq.AppendEntriesRequest (AppendEntriesRequest e) where
-    type Node (AppendEntriesRequest e) = Node
+    type Node (AppendEntriesRequest e) = NodeId
     type Index (AppendEntriesRequest e) = Index
     type Entry (AppendEntriesRequest e) = e
 
     leaderId = lens
-        (Node . Text.toStrict . S.appendEntriesRequestLeaderId . getAppendEntriesRequest)
+        (NodeId . Text.toStrict . S.appendEntriesRequestLeaderId . getAppendEntriesRequest)
         (\(AppendEntriesRequest r) n -> AppendEntriesRequest r { S.appendEntriesRequestLeaderId = Text.fromStrict $ getNode n })
     prevLogIndex = lens
         (Index . S.appendEntriesRequestPrevLogIndex . getAppendEntriesRequest)

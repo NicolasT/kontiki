@@ -8,18 +8,44 @@ import Control.Lens (lens)
 
 import Data.Default (Default(def))
 
-import Test.QuickCheck (Arbitrary, arbitrary)
+import Test.QuickCheck (Arbitrary(arbitrary, shrink))
 import qualified Data.Text.Lazy as Text
 import Data.Text.Arbitrary ()
+
+import qualified Kontiki.Raft.Classes.Types as T
 
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import qualified Kontiki.Raft.Classes.RPC.AppendEntriesResponse as AEResp
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
 
-import Kontiki.Types (Term(Term, getTerm), Index(Index, getIndex), Node(Node, getNode))
-import Kontiki.Protocol.Server (AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse)
+import Kontiki.Protocol.Server (Term, Index, NodeId, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse)
 import qualified Kontiki.Protocol.Server as S
+
+instance T.Term Term where
+    term0 = Term 0
+
+instance Arbitrary Term where
+    arbitrary = Term <$> arbitrary
+    shrink = map Term . shrink . termTerm
+
+
+instance T.Index Index where
+    index0 = Index 0
+    succIndex = Index . succ . indexIndex
+
+instance Arbitrary Index where
+    arbitrary = Index <$> arbitrary
+    shrink = map Index . shrink . indexIndex
+
+instance Default Index where
+    def = Index def
+
+
+instance Arbitrary NodeId where
+    arbitrary = NodeId . Text.fromStrict <$> arbitrary
+    shrink = map (NodeId . Text.fromStrict) . shrink . Text.toStrict . nodeIdNode
+
 
 instance RPC.HasTerm RequestVoteRequest where
     type Term RequestVoteRequest = Term

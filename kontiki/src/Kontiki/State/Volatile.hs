@@ -11,7 +11,7 @@ import Test.QuickCheck (Arbitrary(arbitrary))
 
 import qualified Kontiki.Raft.Classes.State.Volatile as K
 
-import Kontiki.Types (Index)
+import Kontiki.Protocol.Server (Index)
 
 data VolatileState = VolatileState { volatileStateCommitIndex :: {-# UNPACK #-} !Index
                                    , volatileStateLastApplied :: {-# UNPACK #-} !Index
