@@ -101,10 +101,10 @@ instance Arbitrary Entry where
     shrink = map Entry . shrink . getEntry
 
 
-data RequestVoteRequest = RequestVoteRequest { requestVoteRequestTerm :: Term
-                                             , requestVoteRequestCandidateId :: Node
-                                             , requestVoteRequestLastLogIndex :: Index
-                                             , requestVoteRequestLastLogTerm :: Term
+data RequestVoteRequest = RequestVoteRequest { requestVoteRequestTerm :: {-# UNPACK #-} !Term
+                                             , requestVoteRequestCandidateId :: {-# UNPACK #-} !Node
+                                             , requestVoteRequestLastLogIndex :: {-# UNPACK #-} !Index
+                                             , requestVoteRequestLastLogTerm :: {-# UNPACK #-} !Term
                                              }
     deriving (Show, Eq, Generic)
 
@@ -132,8 +132,8 @@ instance RPC.RequestVoteRequest RequestVoteRequest where
     lastLogTerm = lens requestVoteRequestLastLogTerm (\r t -> r { requestVoteRequestLastLogTerm = t })
 
 
-data RequestVoteResponse = RequestVoteResponse { requestVoteResponseTerm :: Term
-                                               , requestVoteResponseVoteGranted :: Bool
+data RequestVoteResponse = RequestVoteResponse { requestVoteResponseTerm :: {-# UNPACK #-} !Term
+                                               , requestVoteResponseVoteGranted :: {-# UNPACK #-} !Bool
                                                }
     deriving (Show, Eq, Generic)
 
@@ -155,12 +155,12 @@ instance RPC.RequestVoteResponse RequestVoteResponse where
     voteGranted = lens requestVoteResponseVoteGranted (\r g -> r { requestVoteResponseVoteGranted = g })
 
 
-data AppendEntriesRequest = AppendEntriesRequest { appendEntriesRequestTerm :: Term
-                                                 , appendEntriesRequestLeaderId :: Node
-                                                 , appendEntriesRequestPrevLogIndex :: Index
-                                                 , appendEntriesRequestPrevLogTerm :: Term
-                                                 , appendEntriesRequestEntries :: NestedVec Entry
-                                                 , appendEntriesRequestLeaderCommit :: Index
+data AppendEntriesRequest = AppendEntriesRequest { appendEntriesRequestTerm :: {-# UNPACK #-} !Term
+                                                 , appendEntriesRequestLeaderId :: {-# UNPACK #-} !Node
+                                                 , appendEntriesRequestPrevLogIndex :: {-# UNPACK #-} !Index
+                                                 , appendEntriesRequestPrevLogTerm :: {-# UNPACK #-} Term
+                                                 , appendEntriesRequestEntries :: {-# UNPACK #-} !(NestedVec Entry)
+                                                 , appendEntriesRequestLeaderCommit :: {-# UNPACK #-} !Index
                                                  }
     deriving (Show, Eq, Generic)
 
@@ -195,8 +195,8 @@ instance RPC.AppendEntriesRequest AppendEntriesRequest where
     leaderCommit = lens appendEntriesRequestLeaderCommit (\r c -> r { appendEntriesRequestLeaderCommit = c })
 
 
-data AppendEntriesResponse = AppendEntriesResponse { appendEntriesResponseTerm :: Term
-                                                   , appendEntriesResponseSuccess :: Bool
+data AppendEntriesResponse = AppendEntriesResponse { appendEntriesResponseTerm :: {-# UNPACK #-} !Term
+                                                   , appendEntriesResponseSuccess :: {-# UNPACK #-} !Bool
                                                    }
     deriving (Show, Eq, Generic)
 

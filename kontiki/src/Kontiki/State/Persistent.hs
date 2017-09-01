@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.State.Persistent (
@@ -63,8 +62,8 @@ instance (Monad m, MonadIO m) => MonadPersistentState (PersistentStateT m) where
     getLogEntry = error "Not implemented"
     setLogEntry = error "Not implemented"
 
-data MaybeNode = MaybeNode { maybeNodeIsNull :: Bool
-                           , maybeNodeNode :: T.Node
+data MaybeNode = MaybeNode { maybeNodeIsNull :: {-# UNPACK #-} !Bool
+                           , maybeNodeNode :: {-# UNPACK #-} !T.Node
                            }
     deriving (Show, Eq, Generic)
 
@@ -72,7 +71,7 @@ instance Proto3.Message MaybeNode
 instance Proto3.Named MaybeNode
 
 maybeNode :: Maybe T.Node -> MaybeNode
-maybeNode = maybe (MaybeNode True def) (\node -> MaybeNode False node)
+maybeNode = maybe (MaybeNode True def) (MaybeNode False)
 
 unMaybeNode :: MaybeNode -> Maybe T.Node
 unMaybeNode mn = if maybeNodeIsNull mn then Nothing else Just (maybeNodeNode mn)

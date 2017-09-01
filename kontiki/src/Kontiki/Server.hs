@@ -7,7 +7,7 @@
 
 module Kontiki.Server (main) where
 
-import Control.Concurrent (threadDelay, myThreadId)
+import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
@@ -132,13 +132,15 @@ data Event m = RPC (GRPC.RequestHandler m -> m ()) | Timeout (Timers.TimeoutHand
 handle :: Logger -> Timers -> Server -> IO ()
 handle logger timers server = DB.withDB "/tmp/kontiki-db" DB.defaultOptions { DB.createIfMissing = True } $ \db -> do
     _ <- Logging.withLogger logger $ runTimersT timers $ runPersistentStateT db $ flip runStateT state0 $ do
-        -- K.initializePersistentState
-        forever $ do
-            event <- liftIO $ atomically $  (Timeout <$> Timers.readTimeout timers)
-                                        <|> (RPC <$> GRPC.readRequest server)
-            case event of
-                RPC fn -> fn rpcHandlers
-                Timeout fn -> fn timeoutHandlers
+        K.initializePersistentState
+        let loop = do
+                event <- liftIO $ atomically $  (Timeout <$> Timers.readTimeout timers)
+                                            <|> (RPC <$> GRPC.readRequest server)
+                case event of
+                    RPC fn -> fn rpcHandlers
+                    Timeout fn -> fn timeoutHandlers
+                loop
+        loop
     return ()
   where
     state0 :: K.SomeState VolatileState ()
@@ -168,19 +170,14 @@ main = withSocketsDo $ do
         stats <- liftIO $ EKG.getDistribution "kontiki.node.rpc" ekg
 
         let serverMain :: (MonadLogger m, MonadIO m, MonadMask m) => m ()
-            serverMain = (liftIO $ GRPC.runServer stats logger server) `finally` $(logInfo) "GRPC server shut down"
+            serverMain = (liftIO $ GRPC.runServer stats logger server) `withException` (\exc -> $(logInfoSH) ("Exception in server" :: Text, (exc :: SomeException)))
+                                                                       `finally` $(logInfo) "GRPC server shut down"
             handlerMain :: (MonadLogger m, MonadIO m, MonadMask m) => m ()
             handlerMain = (liftIO $ handle logger timers server) `withException` (\exc -> $(logInfoSH) ("Exception in handler" :: Text, (exc :: SomeException)))
                                                                  `finally` $(logInfo) "Handler loop shut down"
-            demo :: (MonadLogger m, MonadIO m, MonadMask m) => m ()
-            demo = flip finally ($(logInfo) "Demo shut down") $ do
-                $(logInfo) "Starting"
-                liftIO $ print =<< myThreadId
-                $(logInfo) "Stopping"
 
-        liftIO $ print =<< myThreadId
-
-        withAsync serverMain $ \_ ->
+        _ <- withAsync serverMain $ \_ ->
             withAsync handlerMain $ \_ ->
-                withAsync demo $ \_ ->
-                    liftIO $ forever $ threadDelay (1000 * 1000)
+                liftIO $ forever $ threadDelay (1000 * 1000)
+
+        $(logInfo) "Kontiki exiting..."

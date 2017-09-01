@@ -1,9 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Kontiki.Server.GRPC (
       Server
@@ -13,15 +11,12 @@ module Kontiki.Server.GRPC (
     , readRequest
     ) where
 
-import Control.Concurrent (myThreadId)
 import Control.Concurrent.MVar (MVar)
 import qualified Control.Concurrent.MVar as MVar
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.TQueue (TQueue)
 import qualified Control.Concurrent.STM.TQueue as TQueue
 import Control.Monad.IO.Class (MonadIO, liftIO)
-
-import Control.Concurrent.STM (STM)
 
 import System.Clock (Clock(Realtime), getTime, toNanoSecs)
 
@@ -30,16 +25,13 @@ import qualified System.Metrics.Distribution as Distribution
 
 import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), StatusCode(StatusOk), defaultServiceOptions)
 
-import Data.Text (Text)
-import Control.Monad.Logger (logDebugSH)
-
 import qualified Kontiki.Protocol.GRPC.Node as Server
 import qualified Kontiki.Protocol.Types as T
 import Kontiki.Server.Logging (Logger)
 import qualified Kontiki.Server.Logging as Logging
 
-data Request = RequestVote {-# UNPACK #-} !(T.RequestVoteRequest) !(MVar T.RequestVoteResponse)
-             | AppendEntries {-# UNPACK #-} !(T.AppendEntriesRequest) !(MVar T.AppendEntriesResponse)
+data Request = RequestVote {-# UNPACK #-} !T.RequestVoteRequest !(MVar T.RequestVoteResponse)
+             | AppendEntries {-# UNPACK #-} !T.AppendEntriesRequest !(MVar T.AppendEntriesResponse)
 
 data RequestHandler m = RequestHandler { onRequestVote :: T.RequestVoteRequest -> m T.RequestVoteResponse
                                        , onAppendEntries :: T.AppendEntriesRequest -> m T.AppendEntriesResponse
@@ -76,8 +68,6 @@ handler :: ( MonadIO m
         -> ServerRequest 'Normal req resp
         -> m (ServerResponse 'Normal resp)
 handler stats logger server wrapper (ServerNormalRequest _meta req) = Logging.withLogger logger $ do
-    tid <- liftIO myThreadId
-    $(logDebugSH) ("Thread" :: Text, tid)
     start <- liftIO $ getTime Realtime
     res <- liftIO $ do
         resBox <- MVar.newEmptyMVar

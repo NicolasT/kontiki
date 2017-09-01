@@ -17,7 +17,8 @@ import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), MethodName(Meth
     ServiceOptions(ServiceOptions, serverHost, serverPort, useCompression, userAgentPrefix, userAgentSuffix, initialMetadata, sslConfig, logger))
 import Network.GRPC.HighLevel.Server (Handler(UnaryHandler),
     ServerOptions(optNormalHandlers, optClientStreamHandlers, optServerStreamHandlers, optBiDiStreamHandlers, optServerHost, optServerPort, optUseCompression, optUserAgentPrefix, optUserAgentSuffix, optInitialMetadata, optSSLConfig, optLogger),
-    convertGeneratedServerHandler, defaultOptions, serverLoop)
+    convertGeneratedServerHandler, defaultOptions)
+import Network.GRPC.HighLevel.Server.Unregistered (serverLoop)
 
 import Kontiki.Protocol.Types (RequestVoteRequest, RequestVoteResponse, AppendEntriesRequest, AppendEntriesResponse)
 
