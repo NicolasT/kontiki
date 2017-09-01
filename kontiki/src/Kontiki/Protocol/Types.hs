@@ -158,7 +158,7 @@ instance RPC.RequestVoteResponse RequestVoteResponse where
 data AppendEntriesRequest = AppendEntriesRequest { appendEntriesRequestTerm :: {-# UNPACK #-} !Term
                                                  , appendEntriesRequestLeaderId :: {-# UNPACK #-} !Node
                                                  , appendEntriesRequestPrevLogIndex :: {-# UNPACK #-} !Index
-                                                 , appendEntriesRequestPrevLogTerm :: {-# UNPACK #-} Term
+                                                 , appendEntriesRequestPrevLogTerm :: {-# UNPACK #-} !Term
                                                  , appendEntriesRequestEntries :: {-# UNPACK #-} !(NestedVec Entry)
                                                  , appendEntriesRequestLeaderCommit :: {-# UNPACK #-} !Index
                                                  }
