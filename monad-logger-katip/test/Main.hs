@@ -31,6 +31,12 @@ logStuff = do
     liftIO yield
     $(logError) "Error message"
     $(logInfoS) "source" "This is a message with a source"
+    $(logInfoS) "dotted.source" "This is another source"
+
+examples :: (MonadIO m, MonadLogger m) => m ()
+examples = do
+     $(logInfoS) "db.get" "Retrieving DB rows"
+     $(logOther "fatal") "Unrecoverable error encountered"
 
 main :: IO ()
 main = do
@@ -54,9 +60,11 @@ main = do
             logStuff
             $(logT) () mempty ErrorS "End of KatipT"
 
-        runKatipContextT le initialContext initialNamespace $
+        runKatipContextT le initialContext initialNamespace $ do
             withAsync (logStuff >> liftIO (threadDelay 500)) $ \a -> do
                 $(logInfo) "Some more info"
                 liftIO yield
                 $(logInfo) "And yet some more"
                 wait a
+
+            examples
