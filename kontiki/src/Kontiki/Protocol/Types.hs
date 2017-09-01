@@ -133,7 +133,7 @@ instance RPC.RequestVoteRequest RequestVoteRequest where
 
 
 data RequestVoteResponse = RequestVoteResponse { requestVoteResponseTerm :: {-# UNPACK #-} !Term
-                                               , requestVoteResponseVoteGranted :: {-# UNPACK #-} !Bool
+                                               , requestVoteResponseVoteGranted :: !Bool
                                                }
     deriving (Show, Eq, Generic)
 
@@ -196,7 +196,7 @@ instance RPC.AppendEntriesRequest AppendEntriesRequest where
 
 
 data AppendEntriesResponse = AppendEntriesResponse { appendEntriesResponseTerm :: {-# UNPACK #-} !Term
-                                                   , appendEntriesResponseSuccess :: {-# UNPACK #-} !Bool
+                                                   , appendEntriesResponseSuccess :: !Bool
                                                    }
     deriving (Show, Eq, Generic)
 
