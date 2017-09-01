@@ -23,7 +23,7 @@ Build-Type:    Simple
 Extra-Source-Files:
   README.md
   Makefile
-  src/Kontiki/Protocol/Server.proto
+  proto/kontiki.protocol.server.proto
 
 Source-Repository head
   Type:     git
@@ -73,6 +73,7 @@ Library
                  , Kontiki.Timers
                  , Kontiki.Types
   Hs-Source-Dirs:  src
+                 , gen
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
 
 Executable kontiki
