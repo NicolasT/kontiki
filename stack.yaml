@@ -4,6 +4,7 @@ packages:
 - './kontiki-raft-classes'
 - './kontiki-raft'
 - './kontiki'
+- './monad-logger-katip'
 
 - location:
     git: https://github.com/NicolasT/indexed-extras.git

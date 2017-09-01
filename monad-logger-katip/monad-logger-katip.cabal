@@ -1,0 +1,51 @@
+Name:          monad-logger-katip
+Version:       0.0.0.0
+Synopsis:      A Katip handler for MonadLogger
+Category:      Logging
+Stability:     alpha
+
+Author:        Nicolas Trangez
+Maintainer:    ikke@nicolast.be
+Copyright:     Copyright (C) 2017 Nicolas Trangez
+License:       Apache-2.0
+License-File:  LICENSE
+Homepage:      https://github.com/NicolasT/kontiki/tree/master/monad-logger-katip#readme
+Bug-Reports:   https://github.com/NicolasT/kontiki/labels/monad-logger-katip
+
+Cabal-Version: >= 1.8
+Build-Type:    Simple
+
+Extra-Source-Files:
+  README.md
+
+Source-Repository head
+  Type:     git
+  Location: https://github.com/NicolasT/kontiki.git
+  Subdir:   monad-logger-katip
+
+Library
+  Build-Depends:   base >= 4.9 && < 4.10
+                 , bytestring >= 0.10 && < 0.11
+                 , exceptions >= 00.8 && < 0.9
+                 , fast-logger >= 2.4 && < 2.5
+                 , katip >= 0.5 && < 0.6
+                 , monad-logger >= 0.3 && < 0.4
+                 , monad-control >= 1.0 && < 1.1
+                 , mtl >= 2.2 && < 2.3
+                 , text >= 1.2 && < 1.3
+                 , transformers >= 0.5 && < 0.6
+                 , transformers-base >= 0.4 && < 0.5
+  Exposed-Modules: Control.Monad.Logger.Katip
+  Hs-Source-Dirs:  src
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
+
+Test-Suite monad-logger-katip-test
+  Type:            exitcode-stdio-1.0
+  Main-Is:         Main.hs
+  Build-Depends:   base >= 4.9 && < 4.10
+                 , katip >= 0.5 && < 0.6
+                 , lifted-async >= 0.9 && < 0.10
+                 , monad-logger >= 0.3 && < 0.4
+                 , monad-logger-katip
+  Hs-Source-Dirs:  test
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
