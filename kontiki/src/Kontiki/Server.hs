@@ -40,7 +40,6 @@ import Control.Concurrent.Suspend (msDelay, sDelay)
 
 import qualified Kontiki.Raft as K
 
-import Kontiki.Protocol.Server.Instances ()
 import Kontiki.Server.Logging (Logger)
 import qualified Kontiki.Server.Logging as Logging
 import Kontiki.Server.GRPC (Server)

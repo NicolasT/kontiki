@@ -19,9 +19,9 @@ import qualified Kontiki.Raft.Classes.State.Persistent as K
 import qualified Kontiki.Raft.Classes.State.Volatile as K
 import qualified Kontiki.Raft as K
 
+import Kontiki.Protocol.Types (Index(getIndex), Node(getNode), Term(getTerm))
 import Kontiki.State.Persistent (runPersistentStateT)
 import Kontiki.State.Volatile (VolatileState)
-import Kontiki.Types (Index(getIndex), Node(getNode), Term(getTerm))
 
 registerStats :: DB -> MVar (K.SomeState VolatileState ()) -> EKG.Store -> IO ()
 registerStats db state store = do

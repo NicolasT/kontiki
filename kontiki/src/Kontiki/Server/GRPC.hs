@@ -33,15 +33,16 @@ import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(S
 import Data.Text (Text)
 import Control.Monad.Logger (logDebugSH)
 
-import qualified Kontiki.Protocol.Server as Server
+import qualified Kontiki.Protocol.GRPC.Node as Server
+import qualified Kontiki.Protocol.Types as T
 import Kontiki.Server.Logging (Logger)
 import qualified Kontiki.Server.Logging as Logging
 
-data Request = RequestVote {-# UNPACK #-} !(Server.RequestVoteRequest) !(MVar Server.RequestVoteResponse)
-             | AppendEntries {-# UNPACK #-} !(Server.AppendEntriesRequest) !(MVar Server.AppendEntriesResponse)
+data Request = RequestVote {-# UNPACK #-} !(T.RequestVoteRequest) !(MVar T.RequestVoteResponse)
+             | AppendEntries {-# UNPACK #-} !(T.AppendEntriesRequest) !(MVar T.AppendEntriesResponse)
 
-data RequestHandler m = RequestHandler { onRequestVote :: Server.RequestVoteRequest -> m Server.RequestVoteResponse
-                                       , onAppendEntries :: Server.AppendEntriesRequest -> m Server.AppendEntriesResponse
+data RequestHandler m = RequestHandler { onRequestVote :: T.RequestVoteRequest -> m T.RequestVoteResponse
+                                       , onAppendEntries :: T.AppendEntriesRequest -> m T.AppendEntriesResponse
                                        }
 
 readRequest :: (Monad m, MonadIO m) => Server -> STM (RequestHandler m -> m ())
