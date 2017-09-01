@@ -62,7 +62,7 @@ instance (Monad m, MonadIO m) => MonadPersistentState (PersistentStateT m) where
     getLogEntry = error "Not implemented"
     setLogEntry = error "Not implemented"
 
-data MaybeNode = MaybeNode { maybeNodeIsNull :: {-# UNPACK #-} !Bool
+data MaybeNode = MaybeNode { maybeNodeIsNull :: !Bool
                            , maybeNodeNode :: {-# UNPACK #-} !T.Node
                            }
     deriving (Show, Eq, Generic)
