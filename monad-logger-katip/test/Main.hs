@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -16,13 +17,16 @@ import System.IO (stderr)
 
 import Control.Concurrent.Async.Lifted.Safe (wait, withAsync)
 
-import Control.Monad.Logger (MonadLogger, logDebug, logError, logInfo, logInfoS, logOther)
+import Control.Monad.Logger (MonadLogger(monadLoggerLog), logDebug, logError, logInfo, logInfoS, logOther)
 
 import Katip (
-    ColorStrategy(ColorIfTerminal), Severity(InfoS, ErrorS), Verbosity(V2), closeScribes, defaultScribeSettings,
-    initLogEnv, logT, logTM, mkHandleScribe, registerScribe, runKatipT, runKatipContextT)
+    ColorStrategy(ColorIfTerminal), LogEnv, LogItem, Namespace, Katip, KatipT,
+    KatipContext, KatipContextT, Severity(InfoS, ErrorS), Verbosity(V2),
+    closeScribes, defaultScribeSettings, initLogEnv, logT, logTM, mkHandleScribe,
+    registerScribe, runKatipT, runKatipContextT)
 
-import Control.Monad.Logger.Katip (runKatipLoggingT)
+import Control.Monad.Logger.Katip (defaultMonadLoggerLog, katipLogItem, runKatipLoggingT)
+import Control.Monad.Logger.Katip.Orphans ()
 
 logStuff :: (MonadIO m, MonadLogger m) => m ()
 logStuff = do
@@ -68,3 +72,29 @@ main = do
                 wait a
 
             examples
+
+        -- MyMonad doesn't have a MonadLogger instance. runKKatipLoggingT
+        -- to the rescue.
+        runMyMonad le initialContext initialNamespace $ runKatipLoggingT $
+            $(logInfo) "Info from MyMonad"
+
+        -- Custom monad with MonadLoggerLog instance using
+        -- defaultMonadLoggerLog
+        runMyOtherMonad le $
+            $(logInfo) "Info from MyOtherMonad"
+
+
+newtype MyMonad a = MyMonad { unMyMonad :: KatipContextT IO a }
+    deriving (Functor, Applicative, Monad, MonadIO, Katip, KatipContext)
+
+runMyMonad :: LogItem c => LogEnv -> c -> Namespace -> MyMonad a -> IO a
+runMyMonad le c ns = runKatipContextT le c ns . unMyMonad
+
+newtype MyOtherMonad a = MyOtherMonad { unMyOtherMonad :: KatipT IO a }
+    deriving (Functor, Applicative, Monad, MonadIO, Katip)
+
+instance MonadLogger MyOtherMonad where
+    monadLoggerLog = defaultMonadLoggerLog katipLogItem
+
+runMyOtherMonad :: LogEnv -> MyOtherMonad a -> IO a
+runMyOtherMonad le = runKatipT le . unMyOtherMonad

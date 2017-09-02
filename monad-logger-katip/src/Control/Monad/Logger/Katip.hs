@@ -6,15 +6,13 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 -- |
--- Module: Control.Monad.Logger.Katip
--- Copyright: (C) 2017 Nicolas Trangez
--- License: Apache (see the file LICENSE)
+-- Module:      Control.Monad.Logger.Katip
+-- Copyright:   (C) 2017 Nicolas Trangez
+-- License:     Apache (see the file LICENSE)
 --
--- Maintainer: ikke@nicolast.be
--- Stability: alpha
+-- Maintainer:  ikke@nicolast.be
+-- Stability:   alpha
 -- Portability: DeriveTraversable, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, TemplateHaskell,  TypeFamilies, UndecidableInstances
 --
 -- Linking 'MonadLogger' code with "Katip".
@@ -23,19 +21,17 @@
 -- provides a 'MonadLogger' instance whose effects are passed to some
 -- surrounding 'Katip' context.
 --
--- It also provides orphan 'MonadLogger' instances for 'KatipT' and
--- 'KatipContextT' using the same mechanism.
---
 -- When the 'LogSource' feature of 'MonadLogger' is used, this string is
 -- split on dot characters, and used as "Katip" 'Namespace':
 --
 -- >>> $(logInfoS) "db.get" "Retrieving DB rows"
 -- [2017-09-01 20:51:02][monad-logger-katip-test.db.get][Info][localhost][23952][ThreadId 1][main:Main test/Main.hs:38:8] Retrieving DB rows
 --
--- /Note:/ "Katip" has no support for 'LevelOther'. If a message is logged
--- through 'MonadLogger' using the 'LevelOther' level, a warning message is
--- emitted once (through "Katip"), and the corresponding log messages are
--- logged (also through "Katip") using the 'ErrorS' severity. Furthermore, the
+-- == Handling of 'LevelOther'
+-- "Katip" has no support for 'LevelOther'. If a message is logged through
+-- 'MonadLogger' using the 'LevelOther' level, a warning message is emitted
+-- once (through "Katip"), and the corresponding log messages are logged
+-- (also through "Katip") using the 'ErrorS' severity. Furthermore, the
 -- original level text (as passed to 'LevelOther') is prepended to the log
 -- message, separated with a colon:
 --
@@ -48,10 +44,15 @@ module Control.Monad.Logger.Katip (
       KatipLoggingT(KatipLoggingT)
     , runKatipLoggingT
     , mapKatipLoggingT
+    -- * Utilities to implement a 'MonadLogger' instance for you own 'Katip' or 'KatipContext'
+    , defaultMonadLoggerLog
+    , katipLogItem
+    , katipContextLogItem
     ) where
 
 import Control.Monad (MonadPlus, when)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -66,7 +67,9 @@ import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.RWS.Class (MonadRWS)
 import Control.Monad.State.Class (MonadState)
 import Control.Monad.Trans.Class (MonadTrans, lift)
-import Control.Monad.Trans.Control (MonadBaseControl(StM, liftBaseWith, restoreM), MonadTransControl(StT, liftWith, restoreT))
+import Control.Monad.Trans.Control (
+    MonadBaseControl(StM, liftBaseWith, restoreM), defaultLiftBaseWith, defaultRestoreM,
+    MonadTransControl(StT, liftWith, restoreT), defaultLiftWith, defaultRestoreT)
 import Control.Monad.Trans.Identity (IdentityT(IdentityT, runIdentityT), mapIdentityT)
 import Control.Monad.Writer.Class (MonadWriter)
 import Control.Monad.Zip (MonadZip)
@@ -81,10 +84,8 @@ import Control.Monad.Logger (
 import System.Log.FastLogger (fromLogStr)
 
 import Katip (
-    Katip(getLogEnv, localLogEnv), KatipT,
-    KatipContext(getKatipContext, localKatipContext, getKatipNamespace, localKatipNamespace), KatipContextT,
-    LogStr, Namespace(Namespace, unNamespace), Severity(DebugS, InfoS, WarningS, ErrorS),
-    katipAddNamespace, logItem, logItemM, logStr)
+    Katip(getLogEnv, localLogEnv), KatipContext(getKatipContext, localKatipContext, getKatipNamespace, localKatipNamespace),
+    LogStr, Namespace(Namespace), Severity(DebugS, InfoS, WarningS, ErrorS), katipAddNamespace, logItem, logItemM, logStr)
 
 import Control.Monad.Logger.Katip.Utils (location)
 
@@ -115,13 +116,13 @@ newtype KatipLoggingT m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
 
 instance MonadBaseControl b m => MonadBaseControl b (KatipLoggingT m) where
     type StM (KatipLoggingT m) a = StM m a
-    liftBaseWith f = KatipLoggingT $ liftBaseWith $ \runInBase -> f $ runInBase . unKatipLoggingT
-    restoreM = KatipLoggingT . IdentityT . restoreM
+    liftBaseWith = defaultLiftBaseWith
+    restoreM = defaultRestoreM
 
 instance MonadTransControl KatipLoggingT where
-    type StT KatipLoggingT a = a
-    liftWith f = KatipLoggingT $ IdentityT $ f $ runIdentityT . unKatipLoggingT
-    restoreT = KatipLoggingT . IdentityT
+    type StT KatipLoggingT a = StT IdentityT a
+    liftWith = defaultLiftWith KatipLoggingT unKatipLoggingT
+    restoreT = defaultRestoreT KatipLoggingT
 
 instance Katip m => Katip (KatipLoggingT m) where
     getLogEnv = lift getLogEnv
@@ -132,6 +133,10 @@ instance KatipContext m => KatipContext (KatipLoggingT m) where
     localKatipContext = mapKatipLoggingT . localKatipContext
     getKatipNamespace = lift getKatipNamespace
     localKatipNamespace = mapKatipLoggingT . localKatipNamespace
+
+instance Katip m => MonadLogger (KatipLoggingT m) where
+    monadLoggerLog = defaultMonadLoggerLog katipLogItem
+    {-# INLINE monadLoggerLog #-}
 
 -- | Lift a unary operation to the new monad.
 mapKatipLoggingT :: (m a -> n b) -> KatipLoggingT m a -> KatipLoggingT n b
@@ -144,8 +149,13 @@ runKatipLoggingT = runIdentityT . unKatipLoggingT
 {-# INLINE runKatipLoggingT #-}
 
 
+-- | Default implementation for 'monadLoggerLog'.
+--
+-- The first argument is a handler for generated log messages. In general,
+-- you can simply use 'katipLogItem' or 'katipContextLogItem', depending on
+-- the level of functionality your monad provides.
 defaultMonadLoggerLog :: (MonadIO m, ToLogStr msg)
-                      => (Namespace -> Maybe Loc -> Severity -> LogStr -> m ())
+                      => (Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()) -- ^ Handler for generated log messages
                       -> Loc
                       -> LogSource
                       -> LogLevel
@@ -155,8 +165,8 @@ defaultMonadLoggerLog logItem' loc src level msg = case mapLogLevel level of
     Right level' -> logItem' src' loc' level' msg'
     Left level' -> logLevelOther logItem' src' loc' level' msg'
   where
-    src' | Text.null src = Namespace [] -- Short-circuit common case
-         | otherwise = Namespace $ filter (not . Text.null) (Text.splitOn dot src)
+    src' | Text.null src = Nothing -- Short-circuit common case
+         | otherwise = Just $ Namespace $ Text.splitOn dot src
     -- Don't pass loc if it's defaultLoc (i.e. not really passed to monadLoggerLog)
     -- Common case is to have a location (when using the TH splices)
     loc' = if loc /= defaultLoc then Just loc else Nothing
@@ -179,43 +189,35 @@ emitLevelOtherWarning = unsafePerformIO $ newIORef True
 
 -- Kept out of 'defaultMonadLoggerLog' so that one can be inlined
 logLevelOther :: MonadIO m
-              => (Namespace -> Maybe Loc -> Severity -> LogStr -> m ())
-              -> Namespace
+              => (Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ())
+              -> Maybe Namespace
               -> Maybe Loc
               -> Text
               -> LogStr
               -> m ()
-logLevelOther logItem' src' loc' level' msg' = do
+logLevelOther logItem' src loc level msg = do
     emit <- liftIO $ do
         emit <- readIORef emitLevelOtherWarning
         when emit $
             writeIORef emitLevelOtherWarning False
         return emit
     when emit $
-        logItem' (Namespace []) (Just $(location)) WarningS warning
-    logItem' src' loc' ErrorS $ mconcat [logStr level', logStr ": ", msg']
+        logItem' Nothing (Just $(location)) WarningS warning
+    logItem' src loc ErrorS $ mconcat [logStr level, logStr ": ", msg]
   where
     warning = logStr "monad-logger-katip doesn't support LevelOther, using ErrorS instead"
 
 
-katipLogItem :: Katip m => Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
-katipLogItem = logItem ()
+-- | Handler for 'defaultMonadLoggerLog' which logs messages in a 'Katip' environment.
+katipLogItem :: Katip m => Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
+katipLogItem n = logItem () (fromMaybe emptyNamespace n)
+  where
+    emptyNamespace = Namespace []
 {-# INLINE katipLogItem #-}
 
-katipContextLogItem :: KatipContext m => Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
-katipContextLogItem n l s m | null (unNamespace n) = logItemM l s m
-                            | otherwise = katipAddNamespace n $ logItemM l s m
+-- | Handler for 'defaultMonadLoggerLog' which logs messages in a 'KatipContext' environment.
+katipContextLogItem :: KatipContext m => Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
+katipContextLogItem n l s m = case n of
+    Nothing -> logItemM l s m
+    Just n' -> katipAddNamespace n' $ logItemM l s m
 {-# INLINE katipContextLogItem #-}
-
-
-instance Katip m => MonadLogger (KatipLoggingT m) where
-    monadLoggerLog = defaultMonadLoggerLog katipLogItem
-    {-# INLINE monadLoggerLog #-}
-
-instance MonadIO m => MonadLogger (KatipT m) where
-    monadLoggerLog = defaultMonadLoggerLog katipLogItem
-    {-# INLINE monadLoggerLog #-}
-
-instance MonadIO m => MonadLogger (KatipContextT m) where
-    monadLoggerLog = defaultMonadLoggerLog katipContextLogItem
-    {-# INLINE monadLoggerLog #-}
