@@ -73,7 +73,7 @@ main = do
 
             examples
 
-        -- MyMonad doesn't have a MonadLogger instance. runKKatipLoggingT
+        -- MyMonad doesn't have a MonadLogger instance. runKatipLoggingT
         -- to the rescue.
         runMyMonad le initialContext initialNamespace $ runKatipLoggingT $
             $(logInfo) "Info from MyMonad"
