@@ -94,7 +94,7 @@ newtype MyOtherMonad a = MyOtherMonad { unMyOtherMonad :: KatipT IO a }
     deriving (Functor, Applicative, Monad, MonadIO, Katip)
 
 instance MonadLogger MyOtherMonad where
-    monadLoggerLog = defaultMonadLoggerLog katipLogItem
+    monadLoggerLog = defaultMonadLoggerLog $ katipLogItem ()
 
 runMyOtherMonad :: LogEnv -> MyOtherMonad a -> IO a
 runMyOtherMonad le = runKatipT le . unMyOtherMonad

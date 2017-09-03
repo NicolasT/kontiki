@@ -23,7 +23,7 @@ import Katip (KatipT, KatipContextT)
 import Control.Monad.Logger.Katip (defaultMonadLoggerLog, katipLogItem, katipContextLogItem)
 
 instance MonadIO m => MonadLogger (KatipT m) where
-    monadLoggerLog = defaultMonadLoggerLog katipLogItem
+    monadLoggerLog = defaultMonadLoggerLog $ katipLogItem ()
     {-# INLINE monadLoggerLog #-}
 
 instance MonadIO m => MonadLogger (KatipContextT m) where
