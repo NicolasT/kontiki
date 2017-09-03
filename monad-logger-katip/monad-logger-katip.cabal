@@ -45,7 +45,6 @@ Library
                  , transformers-base >= 0.4 && < 0.5
   Exposed-Modules: Control.Monad.Logger.Katip
                  , Control.Monad.Logger.Katip.Orphans
-  Other-Modules:   Control.Monad.Logger.Katip.Utils
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
 

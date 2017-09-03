@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -14,7 +15,7 @@
 --
 -- Maintainer:  ikke@nicolast.be
 -- Stability:   alpha
--- Portability: DeriveTraversable, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, StandaloneDeriving, TemplateHaskell,  TypeFamilies, UndecidableInstances
+-- Portability: DeriveTraversable, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, Rank2Types, StandaloneDeriving, TemplateHaskell,  TypeFamilies, UndecidableInstances
 --
 -- Linking 'MonadLogger' code with "Katip".
 --
@@ -46,7 +47,8 @@ module Control.Monad.Logger.Katip (
     , runKatipLoggingT
     , mapKatipLoggingT
     -- * Utilities to implement a 'MonadLogger' instance for you own 'Katip' or 'KatipContext'
-    , Handler
+    , LogItem
+    , MonadLoggerLog
     , defaultMonadLoggerLog
     , katipLogItem
     , katipContextLogItem
@@ -93,9 +95,9 @@ import System.Log.FastLogger (fromLogStr)
 
 import Katip (
     Katip(getLogEnv, localLogEnv), KatipContext(getKatipContext, localKatipContext, getKatipNamespace, localKatipNamespace),
-    LogItem, LogStr, Namespace(Namespace), Severity(DebugS, InfoS, WarningS, ErrorS), katipAddNamespace, logItem, logItemM, logStr)
-
-import Control.Monad.Logger.Katip.Utils (location)
+    LogStr, Namespace(Namespace), Severity(DebugS, InfoS, WarningS, ErrorS), katipAddNamespace, logItem, logItemM, logStr)
+import qualified Katip
+import Katip.Core (getLocTH)
 
 -- Using IdentityT gives us lots of instances 'for free'
 
@@ -167,20 +169,19 @@ runKatipLoggingT = runIdentityT . unKatipLoggingT
 {-# INLINE runKatipLoggingT #-}
 
 -- | Type of handler actions passed to 'defaultMonadLoggerLog'.
-type Handler m = Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
+type LogItem m = Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
+
+-- | The type of 'monadLoggerLog'.
+type MonadLoggerLog m = forall msg. ToLogStr msg => Loc -> LogSource -> LogLevel -> msg -> m ()
 
 -- | Default implementation for 'monadLoggerLog'.
 --
 -- The first argument is a handler for generated log messages. In general,
 -- you can simply use 'katipLogItem' or 'katipContextLogItem', depending on
 -- the level of functionality your monad provides.
-defaultMonadLoggerLog :: (MonadIO m, ToLogStr msg)
-                      => Handler m -- ^ Handler for generated log messages
-                      -> Loc
-                      -> LogSource
-                      -> LogLevel
-                      -> msg
-                      -> m ()
+defaultMonadLoggerLog :: MonadIO m
+                      => LogItem m -- ^ Handler for generated log messages
+                      -> MonadLoggerLog m
 defaultMonadLoggerLog logItem' loc src level msg = case mapLogLevel level of
     Right level' -> logItem' src' loc' level' msg'
     Left level' -> logLevelOther logItem' src' loc' level' msg'
@@ -209,7 +210,7 @@ emitLevelOtherWarning = unsafePerformIO $ newIORef True
 
 -- Kept out of 'defaultMonadLoggerLog' so that one can be inlined
 logLevelOther :: MonadIO m
-              => Handler m
+              => LogItem m
               -> Maybe Namespace
               -> Maybe Loc
               -> Text
@@ -222,23 +223,23 @@ logLevelOther logItem' src loc level msg = do
             writeIORef emitLevelOtherWarning False
         return emit
     when emit $
-        logItem' Nothing (Just $(location)) WarningS warning
+        logItem' Nothing (Just $(getLocTH)) WarningS warning
     logItem' src loc ErrorS $ mconcat [logStr level, logStr ": ", msg]
   where
     warning = logStr "monad-logger-katip doesn't support LevelOther, using ErrorS instead"
 
 
 -- | Handler for 'defaultMonadLoggerLog' which logs messages in a 'Katip' environment using 'logItem'.
-katipLogItem :: (Katip m, LogItem i)
-             => i -- ^ 'LogItem' passed to 'logItem'
-             -> Handler m
+katipLogItem :: (Katip m, Katip.LogItem i)
+             => i -- ^ 'Katip.LogItem' passed to 'logItem'
+             -> LogItem m
 katipLogItem i = logItem i . fromMaybe emptyNamespace
   where
     emptyNamespace = Namespace []
 {-# INLINE katipLogItem #-}
 
 -- | Handler for 'defaultMonadLoggerLog' which logs messages in a 'KatipContext' environment using 'logItemM'.
-katipContextLogItem :: KatipContext m => Handler m
+katipContextLogItem :: KatipContext m => LogItem m
 katipContextLogItem n = case n of
     Nothing -> logItemM
     Just n' -> \l s m -> katipAddNamespace n' $ logItemM l s m
