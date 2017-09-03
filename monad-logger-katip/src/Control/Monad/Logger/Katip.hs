@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -45,6 +46,7 @@ module Control.Monad.Logger.Katip (
     -- * The KatipLoggingT monad transformer
       KatipLoggingT(KatipLoggingT)
     , runKatipLoggingT
+    , runKatipContextLoggingT
     , mapKatipLoggingT
     -- * Utilities to implement a 'MonadLogger' instance for you own 'Katip' or 'KatipContext'
     , LogItem
@@ -58,6 +60,7 @@ import Control.Monad (MonadPlus, when)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat)
+import GHC.Exts (Constraint)
 import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Applicative (Alternative)
@@ -102,7 +105,7 @@ import Katip.Core (getLocTH)
 -- Using IdentityT gives us lots of instances 'for free'
 
 -- | A monad transformer which provides a 'MonadLogger' implementation through 'Katip'.
-newtype KatipLoggingT m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
+newtype KatipLoggingT (ctx :: (* -> *) -> Constraint) m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
     deriving (
         Eq, Ord, Read, Show, Eq1, Ord1, Read1, Show1,
         Functor, Applicative, Monad,
@@ -128,45 +131,54 @@ newtype KatipLoggingT m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
         MonadZip,
         Traversable)
 
-deriving instance MonadResource m => MonadResource (KatipLoggingT m)
+deriving instance MonadResource m => MonadResource (KatipLoggingT ctx m)
 
-instance MonadBaseControl b m => MonadBaseControl b (KatipLoggingT m) where
-    type StM (KatipLoggingT m) a = StM (IdentityT m) a
+instance MonadBaseControl b m => MonadBaseControl b (KatipLoggingT ctx m) where
+    type StM (KatipLoggingT ctx m) a = StM (IdentityT m) a
     liftBaseWith = defaultLiftBaseWith
     restoreM = defaultRestoreM
 
-instance MonadTransControl KatipLoggingT where
-    type StT KatipLoggingT a = StT IdentityT a
+instance MonadTransControl (KatipLoggingT ctx) where
+    type StT (KatipLoggingT ctx) a = StT IdentityT a
     liftWith = defaultLiftWith KatipLoggingT unKatipLoggingT
     restoreT = defaultRestoreT KatipLoggingT
 
-instance PrimMonad m => PrimMonad (KatipLoggingT m) where
-    type PrimState (KatipLoggingT m) = PrimState (IdentityT m)
+instance PrimMonad m => PrimMonad (KatipLoggingT ctx m) where
+    type PrimState (KatipLoggingT ctx m) = PrimState (IdentityT m)
     primitive = lift . primitive
 
-instance Katip m => Katip (KatipLoggingT m) where
+instance Katip m => Katip (KatipLoggingT ctx m) where
     getLogEnv = lift getLogEnv
     localLogEnv = mapKatipLoggingT . localLogEnv
 
-instance KatipContext m => KatipContext (KatipLoggingT m) where
+instance KatipContext m => KatipContext (KatipLoggingT ctx m) where
     getKatipContext = lift getKatipContext
     localKatipContext = mapKatipLoggingT . localKatipContext
     getKatipNamespace = lift getKatipNamespace
     localKatipNamespace = mapKatipLoggingT . localKatipNamespace
 
-instance Katip m => MonadLogger (KatipLoggingT m) where
+instance Katip m => MonadLogger (KatipLoggingT Katip m) where
     monadLoggerLog = defaultMonadLoggerLog $ katipLogItem ()
     {-# INLINE monadLoggerLog #-}
 
+instance KatipContext m => MonadLogger (KatipLoggingT KatipContext m) where
+    monadLoggerLog = defaultMonadLoggerLog katipContextLogItem
+    {-# INLINE monadLoggerLog #-}
+
 -- | Lift a unary operation to the new monad.
-mapKatipLoggingT :: (m a -> n b) -> KatipLoggingT m a -> KatipLoggingT n b
+mapKatipLoggingT :: (m a -> n b) -> KatipLoggingT ctx m a -> KatipLoggingT ctx n b
 mapKatipLoggingT f = KatipLoggingT . mapIdentityT f . unKatipLoggingT
 {-# INLINE mapKatipLoggingT #-}
 
--- | Run a 'KatipLoggingT', rendering all 'MonadLogger' effects through 'Katip'.
-runKatipLoggingT :: Katip m => KatipLoggingT m a -> m a
+-- | Run a /'KatipLoggingT' Katip/, in turn rendering all 'MonadLogger' effects through 'Katip'.
+runKatipLoggingT :: KatipLoggingT Katip m a -> m a
 runKatipLoggingT = runIdentityT . unKatipLoggingT
 {-# INLINE runKatipLoggingT #-}
+
+-- | Run a /'KatipLoggingT' KatipContext/, in turn rendering all 'MonadLogger' effects through 'KatipContext'.
+runKatipContextLoggingT :: KatipLoggingT KatipContext m a -> m a
+runKatipContextLoggingT = runIdentityT . unKatipLoggingT
+{-# INLINE runKatipContextLoggingT #-}
 
 -- | Type of handler actions passed to 'defaultMonadLoggerLog'.
 type LogItem m = Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()

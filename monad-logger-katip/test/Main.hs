@@ -25,7 +25,7 @@ import Katip (
     closeScribes, defaultScribeSettings, initLogEnv, logT, logTM, mkHandleScribe,
     registerScribe, runKatipT, runKatipContextT)
 
-import Control.Monad.Logger.Katip (defaultMonadLoggerLog, katipLogItem, runKatipLoggingT)
+import Control.Monad.Logger.Katip (defaultMonadLoggerLog, katipLogItem, runKatipLoggingT, runKatipContextLoggingT)
 import Control.Monad.Logger.Katip.Orphans ()
 
 logStuff :: (MonadIO m, MonadLogger m) => m ()
@@ -82,6 +82,11 @@ main = do
         -- defaultMonadLoggerLog
         runMyOtherMonad le $
             $(logInfo) "Info from MyOtherMonad"
+
+        runMyMonad le () "ns" $ runKatipLoggingT examples
+        runMyMonad le () "ns" $ runKatipContextLoggingT examples
+        runMyOtherMonad le $ runKatipLoggingT examples
+        -- runMyOtherMonad le $ runKatipContextLoggingT examples
 
 
 newtype MyMonad a = MyMonad { unMyMonad :: KatipContextT IO a }
