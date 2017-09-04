@@ -106,7 +106,7 @@ import Katip.Core (getLocTH)
 
 -- Using IdentityT gives us lots of instances 'for free'
 
--- | A monad transformer which provides a 'MonadLogger' implementation through 'Katip'.
+-- | A monad transformer which provides a 'MonadLogger' implementation through 'Katip' or 'KatipContext'.
 newtype KatipLoggingT (ctx :: k) m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
     deriving (
         Eq1, Ord1, Read1, Show1,
