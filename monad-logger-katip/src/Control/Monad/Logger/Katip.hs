@@ -177,7 +177,7 @@ mapKatipLoggingT :: (m a -> n b) -> KatipLoggingT ctx m a -> KatipLoggingT ctx n
 mapKatipLoggingT f = KatipLoggingT . mapIdentityT f . unKatipLoggingT
 {-# INLINE mapKatipLoggingT #-}
 
--- | Run a 'KatipLoggingT' 'ctx', in turn rendering all 'MonadLogger' effects through 'ctx' in 'm'.
+-- | Run a 'KatipLoggingT' 'ctx' 'm', in turn rendering all 'MonadLogger' effects through 'ctx' in 'm'.
 --
 -- The "Katip" packages provides two levels of functionality: 'Katip' and
 -- 'KatipContext', where the latter is more powerful than the first. Users
