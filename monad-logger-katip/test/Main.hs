@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- This code doesn't really test functionality, it merely asserts code
@@ -25,7 +26,7 @@ import Katip (
     closeScribes, defaultScribeSettings, initLogEnv, logT, logTM, mkHandleScribe,
     registerScribe, runKatipT, runKatipContextT)
 
-import Control.Monad.Logger.Katip (defaultMonadLoggerLog, katipLogItem, runKatipLoggingT, runKatipContextLoggingT)
+import Control.Monad.Logger.Katip (defaultMonadLoggerLog, katipLogItem, runKatipLoggingT)
 import Control.Monad.Logger.Katip.Orphans ()
 
 logStuff :: (MonadIO m, MonadLogger m) => m ()
@@ -52,7 +53,7 @@ main = do
             initialNamespace = "main"
         runKatipContextT le initialContext initialNamespace $ do
             $(logTM) InfoS "Standard message"
-            runKatipLoggingT $ do
+            runKatipLoggingT @KatipContext $ do
                 logStuff
                 $(logOther "fatal") "Fatal message"
                 $(logTM) InfoS "Another standard message"
@@ -75,7 +76,7 @@ main = do
 
         -- MyMonad doesn't have a MonadLogger instance. runKatipLoggingT
         -- to the rescue.
-        runMyMonad le initialContext initialNamespace $ runKatipLoggingT $
+        runMyMonad le initialContext initialNamespace $ runKatipLoggingT @KatipContext $
             $(logInfo) "Info from MyMonad"
 
         -- Custom monad with MonadLoggerLog instance using
@@ -83,10 +84,10 @@ main = do
         runMyOtherMonad le $
             $(logInfo) "Info from MyOtherMonad"
 
-        runMyMonad le () "ns" $ runKatipLoggingT examples
-        runMyMonad le () "ns" $ runKatipContextLoggingT examples
-        runMyOtherMonad le $ runKatipLoggingT examples
-        -- runMyOtherMonad le $ runKatipContextLoggingT examples
+        runMyMonad le () "ns" $ runKatipLoggingT @Katip examples
+        runMyMonad le () "ns" $ runKatipLoggingT @KatipContext examples
+        runMyOtherMonad le $ runKatipLoggingT @Katip examples
+        -- runMyOtherMonad le $ runKatipLoggingT @KatipContext examples
 
 
 newtype MyMonad a = MyMonad { unMyMonad :: KatipContextT IO a }

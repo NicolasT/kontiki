@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -16,7 +17,7 @@
 --
 -- Maintainer:  ikke@nicolast.be
 -- Stability:   alpha
--- Portability: DeriveTraversable, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, Rank2Types, StandaloneDeriving, TemplateHaskell,  TypeFamilies, UndecidableInstances
+-- Portability: DeriveTraversable, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, PolyKinds, Rank2Types, StandaloneDeriving, TemplateHaskell,  TypeFamilies, UndecidableInstances
 --
 -- Linking 'MonadLogger' code with "Katip".
 --
@@ -46,8 +47,10 @@ module Control.Monad.Logger.Katip (
     -- * The KatipLoggingT monad transformer
       KatipLoggingT(KatipLoggingT)
     , runKatipLoggingT
-    , runKatipContextLoggingT
     , mapKatipLoggingT
+    -- ** Re-exports to use with 'runKatipLoggingT' and 'TypeApplications'
+    , Katip
+    , KatipContext
     -- * Utilities to implement a 'MonadLogger' instance for you own 'Katip' or 'KatipContext'
     , LogItem
     , MonadLoggerLog
@@ -60,7 +63,6 @@ import Control.Monad (MonadPlus, when)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat)
-import GHC.Exts (Constraint)
 import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Applicative (Alternative)
@@ -105,9 +107,9 @@ import Katip.Core (getLocTH)
 -- Using IdentityT gives us lots of instances 'for free'
 
 -- | A monad transformer which provides a 'MonadLogger' implementation through 'Katip'.
-newtype KatipLoggingT (ctx :: (* -> *) -> Constraint) m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
+newtype KatipLoggingT (ctx :: k) m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
     deriving (
-        Eq, Ord, Read, Show, Eq1, Ord1, Read1, Show1,
+        Eq1, Ord1, Read1, Show1,
         Functor, Applicative, Monad,
         Alternative,
         Foldable,
@@ -130,6 +132,11 @@ newtype KatipLoggingT (ctx :: (* -> *) -> Constraint) m a = KatipLoggingT { unKa
         MonadWriter w,
         MonadZip,
         Traversable)
+
+deriving instance (Eq1 m, Eq a) => Eq (KatipLoggingT ctx m a)
+deriving instance (Ord1 m, Ord a) => Ord (KatipLoggingT ctx m a)
+deriving instance (Read1 m, Read a) => Read (KatipLoggingT ctx m a)
+deriving instance (Show1 m, Show a) => Show (KatipLoggingT ctx m a)
 
 deriving instance MonadResource m => MonadResource (KatipLoggingT ctx m)
 
@@ -170,15 +177,51 @@ mapKatipLoggingT :: (m a -> n b) -> KatipLoggingT ctx m a -> KatipLoggingT ctx n
 mapKatipLoggingT f = KatipLoggingT . mapIdentityT f . unKatipLoggingT
 {-# INLINE mapKatipLoggingT #-}
 
--- | Run a /'KatipLoggingT' Katip/, in turn rendering all 'MonadLogger' effects through 'Katip'.
-runKatipLoggingT :: KatipLoggingT Katip m a -> m a
+-- | Run a 'KatipLoggingT' 'ctx', in turn rendering all 'MonadLogger' effects through 'ctx'.
+--
+-- The "Katip" packages provides two levels of functionality: 'Katip' and
+-- 'KatipContext', where the latter is more powerful than the first. Users
+-- of the 'KatipLoggingT' transformer should be able to use it in both
+-- kinds of environments.
+--
+-- Instead of duplicating all functionality, 'KatipLoggingT' is
+-- parametrized over a context (the 'ctx' variable), and two instances of
+-- 'MonadLogger' are provided:
+--
+-- @
+-- instance Katip m => MonadLogger (KatipLoggingT Katip m)
+-- instance KatipContext m => MonadLogger (KatipLoggingT KatipContext m)
+-- @
+--
+-- where the first uses 'defaultMonadLoggerLog' 'katipLogItem' (i.e.
+-- 'logItem'), the second 'defaultMonadLoggerLog' 'katipContextLogItem'
+-- (i.e. 'logItemM').
+--
+-- Now whenever a 'KatipLoggingT' is found, one can select which
+-- implementation to use by passing the desired 'ctx' to
+-- 'runKatipLoggingT'. Say we have
+--
+-- @
+-- myLoggingAction :: MonadLogger m => m ()
+-- @
+--
+-- then we get
+--
+-- @
+-- runKatipLoggingT myLoggingAction :: MonadLogger (KatipLoggingT ctx m) => m ()
+-- @
+--
+-- To evaluate this action, we need to fix 'ctx', e.g. using
+-- 'TypeApplication':
+--
+-- >>> runKatipLoggingT @Katip myLoggingAction :: Katip m => m ()
+-- >>> runKatipLoggingT @KatipContext myLoggingAction :: KatipContext m => m ()
+--
+-- Depending on the functionality available in the environment, we can use
+-- one or the other.
+runKatipLoggingT :: forall ctx m a. KatipLoggingT ctx m a -> m a
 runKatipLoggingT = runIdentityT . unKatipLoggingT
 {-# INLINE runKatipLoggingT #-}
-
--- | Run a /'KatipLoggingT' KatipContext/, in turn rendering all 'MonadLogger' effects through 'KatipContext'.
-runKatipContextLoggingT :: KatipLoggingT KatipContext m a -> m a
-runKatipContextLoggingT = runIdentityT . unKatipLoggingT
-{-# INLINE runKatipContextLoggingT #-}
 
 -- | Type of handler actions passed to 'defaultMonadLoggerLog'.
 type LogItem m = Maybe Namespace -> Maybe Loc -> Severity -> LogStr -> m ()
