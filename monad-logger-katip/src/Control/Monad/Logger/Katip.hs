@@ -105,6 +105,9 @@ import qualified Katip
 import Katip.Core (getLocTH)
 
 -- Using IdentityT gives us lots of instances 'for free'
+-- Rules for instances: anything which is in 'base', or any of the
+-- transitive dependencies of 'katip' or 'monad-logger' (on which we
+-- depend anyway) goes. Introducing new dependencies is to be avoided.
 
 -- | A monad transformer which provides a 'MonadLogger' implementation through 'Katip' or 'KatipContext'.
 newtype KatipLoggingT (ctx :: k) m a = KatipLoggingT { unKatipLoggingT :: IdentityT m a }
