@@ -1,14 +1,20 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
-
--- |
--- This code doesn't really test functionality, it merely asserts code
--- that's expected to compile/type-check actually does so.
-
 module Main (main) where
 
+import Test.Tasty (defaultMain, testGroup)
+
+import qualified Control.Monad.Logger.Katip.Test
+import qualified Control.Monad.Logger.Katip.Orphans.Test
+
+main :: IO ()
+main = do
+    cmlk <- Control.Monad.Logger.Katip.Test.tests
+    cmlko <- Control.Monad.Logger.Katip.Orphans.Test.tests
+    defaultMain $ testGroup "monad-logger-katip" [
+        cmlk
+      , cmlko
+      ]
+
+{-
 import Control.Concurrent (threadDelay, yield)
 import Control.Exception (bracket)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -104,3 +110,5 @@ instance MonadLogger MyOtherMonad where
 
 runMyOtherMonad :: LogEnv -> MyOtherMonad a -> IO a
 runMyOtherMonad le = runKatipT le . unMyOtherMonad
+
+-}

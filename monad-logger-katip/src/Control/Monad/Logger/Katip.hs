@@ -22,7 +22,7 @@
 --
 -- This module provides a monad transformer, 'KatipLoggingT', which
 -- provides a 'MonadLogger' instance whose effects are passed to some
--- surrounding 'Katip' context.
+-- surrounding 'Katip' or 'KatipContext' context.
 --
 -- When the 'LogSource' feature of 'MonadLogger' is used, this string is
 -- split on dot characters, and used as "Katip" 'Namespace':
@@ -218,6 +218,9 @@ mapKatipLoggingT f = KatipLoggingT . mapIdentityT f . unKatipLoggingT
 --
 -- >>> runKatipLoggingT @Katip myLoggingAction :: Katip m => m ()
 -- >>> runKatipLoggingT @KatipContext myLoggingAction :: KatipContext m => m ()
+--
+-- /Note:/ In the above, the type signatures are for documentation purposes
+-- only, they don't need to be written in actual code.
 --
 -- Depending on the functionality available in the environment, we can use
 -- one or the other.

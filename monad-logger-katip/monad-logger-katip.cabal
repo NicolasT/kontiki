@@ -39,7 +39,6 @@ Library
                  , mtl >= 2.2 && < 2.3
                  , primitive >= 0.6 && < 0.7
                  , resourcet >= 1.1 && < 1.2
-                 , template-haskell >= 2.11 && < 2.12
                  , text >= 1.2 && < 1.3
                  , transformers >= 0.5 && < 0.6
                  , transformers-base >= 0.4 && < 0.5
@@ -55,10 +54,21 @@ Library
 Test-Suite monad-logger-katip-test
   Type:            exitcode-stdio-1.0
   Main-Is:         Main.hs
-  Build-Depends:   base >= 4.9 && < 4.10
+  Other-Modules:   Control.Monad.Logger.Katip.Orphans.Test
+                 , Control.Monad.Logger.Katip.Test
+                 , Control.Monad.Logger.Katip.Test.ShouldNotTypecheck
+                 , Utils
+  Build-Depends:   aeson >= 1.1 && < 1.2
+                 , base >= 4.9 && < 4.10
                  , katip >= 0.5 && < 0.6
                  , lifted-async >= 0.9 && < 0.10
                  , monad-logger >= 0.3 && < 0.4
+                 , mtl >= 2.2 && < 2.3
+                 , should-not-typecheck >= 2.1 && < 2.2
+                 , stm >= 2.4 && < 2.5
+                 , tasty >= 0.11 && < 0.12
+                 , tasty-hspec >= 1.1 && < 1.2
+                 , text >= 1.2 && < 1.3
                  , monad-logger-katip
   Hs-Source-Dirs:  test
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
