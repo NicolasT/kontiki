@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.State.Volatile (
@@ -6,6 +7,8 @@ module Kontiki.State.Volatile (
 
 import Control.Lens (lens)
 import Data.Default (Default(def))
+
+import Data.Aeson (ToJSON(toJSON), (.=), object)
 
 import Test.QuickCheck (Arbitrary(arbitrary))
 
@@ -30,3 +33,8 @@ instance Default VolatileState where
 instance Arbitrary VolatileState where
     arbitrary = VolatileState <$> arbitrary
                               <*> arbitrary
+
+instance ToJSON VolatileState where
+    toJSON s = object [ "commitIndex" .= volatileStateCommitIndex s
+                      , "lastApplied" .= volatileStateLastApplied s
+                      ]

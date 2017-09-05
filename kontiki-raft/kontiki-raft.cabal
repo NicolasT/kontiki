@@ -30,13 +30,15 @@ Source-Repository head
   Subdir:   kontiki-raft
 
 Library
-  Build-Depends:   base >= 4.9 && < 4.10
+  Build-Depends:   aeson >= 1.1 && < 1.2
+                 , base >= 4.9 && < 4.10
                  , data-default-class >= 0.1 && < 0.2
                  , indexed >= 0.1 && < 0.2
                  , indexed-extras >= 0.2 && < 0.3
                  , lens >= 4.15 && < 4.16
                  , monad-logger >= 0.3 && < 0.4
                  , mtl >= 2.2 && < 2.3
+                 , text >= 1.2 && < 1.3
                  , kontiki-raft-classes
   Exposed-Modules: Kontiki.Raft
                  , Kontiki.Raft.Internal.AllServers

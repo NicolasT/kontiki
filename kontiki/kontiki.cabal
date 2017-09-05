@@ -29,19 +29,24 @@ Source-Repository head
   Subdir:   kontiki
 
 Library
-  Build-Depends:   base >= 4.9 && < 4.10
+  Build-Depends:   aeson >= 1.1 && < 1.2
+                 , base >= 4.9 && < 4.10
                  , bytestring >= 0.10 && < 0.11
                  , clock >= 0.7 && < 0.8
                  , data-default >= 0.7 && < 0.8
                  , ekg >= 0.4 && < 0.5
                  , ekg-core >= 0.1 && < 0.2
+                 , exceptions >= 0.8 && < 0.9
                  , grpc-haskell >= 0.0 && < 0.1
+                 , katip >= 0.5 && < 0.6
                  , lens >= 4.15 && < 4.16
                  , leveldb-haskell >= 0.6 && < 0.7
                  , lifted-async >= 0.9 && < 0.10
                  , lifted-base >= 0.2 && < 0.3
                  , monad-control >= 1.0 && < 1.1
                  , monad-logger >= 0.3 && < 0.4
+                 , monad-logger-katip >= 0.0 && < 0.1
+                 , mtl >= 2.2 && < 2.3
                  , network >= 2.6 && < 2.7
                  , proto3-suite >= 0.1 && < 0.2
                  , proto3-wire >= 1.0 && < 1.1
@@ -63,7 +68,6 @@ Library
                  , Kontiki.Server.EKG
                  , Kontiki.Server.GRPC
                  , Kontiki.Server.Killswitch
-                 , Kontiki.Server.Logging
                  , Kontiki.State.Persistent
                  , Kontiki.State.Volatile
                  , Kontiki.Timers

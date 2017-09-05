@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -14,6 +15,10 @@ module Kontiki.Raft.Internal.State (
     ) where
 
 import Control.Lens ((^.), (&), (.~), lens)
+
+import Data.Text (Text)
+
+import Data.Aeson (ToJSON(toJSON), (.=), object)
 
 import Kontiki.Raft.Classes.State.Volatile (VolatileState(Index, commitIndex, lastApplied))
 
@@ -53,6 +58,18 @@ instance VolatileState volatileState => VolatileState (State volatileState volat
             C v -> C $ v & lastApplied .~ i
             L v l -> L (v & lastApplied .~ i) l)
 
+instance (ToJSON volatileState, ToJSON volatileLeaderState) => ToJSON (State volatileState volatileLeaderState r) where
+    toJSON s = case s of
+        F v -> object [ "role" .= ("follower" :: Text)
+                      , "volatileState" .= v
+                      ]
+        C v -> object [ "role" .= ("candidate" :: Text)
+                      , "volatileState" .= v
+                      ]
+        L v l -> object [ "role" .= ("leader" :: Text)
+                        , "volatileState" .= v
+                        , "volatileLeaderState" .= l
+                        ]
 
 
 data SomeState volatileState volatileLeaderState where
@@ -72,6 +89,10 @@ instance (Eq volatileState, Eq volatileLeaderState) => Eq (SomeState volatileSta
                 L _ _ -> case b' of
                     L _ _ -> a' == b'
                     _ -> False
+
+instance (ToJSON volatileState, ToJSON volatileLeaderState) => ToJSON (SomeState volatileState volatileLeaderState) where
+    toJSON (SomeState s) = toJSON s
+
 
 role :: SomeState volatileState volatileLeaderState -> Role
 role (SomeState s) = case s of

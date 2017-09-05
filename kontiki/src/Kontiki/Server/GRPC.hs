@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Kontiki.Server.GRPC (
       Server
@@ -27,8 +28,6 @@ import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(S
 
 import qualified Kontiki.Protocol.GRPC.Node as Server
 import qualified Kontiki.Protocol.Types as T
-import Kontiki.Server.Logging (Logger)
-import qualified Kontiki.Server.Logging as Logging
 
 data Request = RequestVote {-# UNPACK #-} !T.RequestVoteRequest !(MVar T.RequestVoteResponse)
              | AppendEntries {-# UNPACK #-} !T.AppendEntriesRequest !(MVar T.AppendEntriesResponse)
@@ -49,12 +48,12 @@ newtype Server = Server { serverQueue :: TQueue Request }
 mkServer :: IO Server
 mkServer = Server <$> TQueue.newTQueueIO
 
-runServer :: Distribution -> Logger -> Server -> IO ()
-runServer stats logger server = Server.nodeServer impl opts
+runServer :: Distribution -> Server -> IO ()
+runServer stats server = Server.nodeServer impl opts
   where
-    opts = defaultServiceOptions
-    impl = Server.Node { Server.nodeRequestVote = handler stats logger server RequestVote
-                       , Server.nodeAppendEntries = handler stats logger server AppendEntries
+    opts = defaultServiceOptions -- { logger = \s -> _ } -- $(logError) (Text.pack s) }
+    impl = Server.Node { Server.nodeRequestVote = handler stats server RequestVote
+                       , Server.nodeAppendEntries = handler stats server AppendEntries
                        }
 
 handler :: ( MonadIO m
@@ -62,12 +61,11 @@ handler :: ( MonadIO m
            , Show resp
            )
         => Distribution
-        -> Logger
         -> Server
         -> (req -> MVar resp -> Request)
         -> ServerRequest 'Normal req resp
         -> m (ServerResponse 'Normal resp)
-handler stats logger server wrapper (ServerNormalRequest _meta req) = Logging.withLogger logger $ do
+handler stats server wrapper (ServerNormalRequest _meta req) = do
     start <- liftIO $ getTime Realtime
     res <- liftIO $ do
         resBox <- MVar.newEmptyMVar

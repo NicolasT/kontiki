@@ -16,6 +16,7 @@ import Control.Monad.Trans.Class (MonadTrans)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
 import Control.Monad.Logger (MonadLogger)
+import Katip (Katip, KatipContext)
 
 import Data.Default (def)
 
@@ -37,7 +38,7 @@ import qualified Kontiki.Protocol.Types as T
 
 newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: ReaderT L.DB m a }
     deriving {- stock -} (Functor
-    {- deriving newtype ( -} , Applicative, Monad, MonadTrans, MonadIO
+    {- deriving newtype ( -} , Applicative, Monad, MonadTrans, MonadIO, Katip, KatipContext
     {- deriving anyclass ( -} , MonadLogger, MonadTimers)
 
 runPersistentStateT :: L.DB -> PersistentStateT m a -> m a

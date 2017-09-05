@@ -21,6 +21,8 @@ import GHC.Generics (Generic)
 import Data.Text (Text)
 import Data.Text.Arbitrary ()
 
+import Data.Aeson (ToJSON(toJSON), (.=), object)
+
 import qualified Data.Vector as V
 
 import Control.Lens (lens)
@@ -55,6 +57,9 @@ instance Arbitrary Term where
 instance T.Term Term where
     term0 = Term 0
 
+instance ToJSON Term where
+    toJSON = toJSON . getTerm
+
 
 newtype Index = Index { getIndex :: Word64 }
     deriving (Show, Eq, Ord, Generic)
@@ -73,6 +78,8 @@ instance T.Index Index where
     index0 = Index 0
     succIndex = Index . succ . getIndex
 
+instance ToJSON Index where
+    toJSON = toJSON . getIndex
 
 newtype Node = Node { getNode :: Text }
     deriving (Show, Eq, Generic)
@@ -87,6 +94,9 @@ instance Arbitrary Node where
     arbitrary = Node <$> arbitrary
     shrink = map Node . shrink . getNode
 
+instance ToJSON Node where
+    toJSON = toJSON . getNode
+
 
 newtype Entry = Entry { getEntry :: Word64 }
     deriving (Show, Eq, Generic)
@@ -99,6 +109,9 @@ instance Default Entry
 instance Arbitrary Entry where
     arbitrary = Entry <$> arbitrary
     shrink = map Entry . shrink . getEntry
+
+instance ToJSON Entry where
+    toJSON = toJSON . getEntry
 
 
 data RequestVoteRequest = RequestVoteRequest { requestVoteRequestTerm :: {-# UNPACK #-} !Term
@@ -131,6 +144,13 @@ instance RPC.RequestVoteRequest RequestVoteRequest where
     lastLogIndex = lens requestVoteRequestLastLogIndex (\r i -> r { requestVoteRequestLastLogIndex = i })
     lastLogTerm = lens requestVoteRequestLastLogTerm (\r t -> r { requestVoteRequestLastLogTerm = t })
 
+instance ToJSON RequestVoteRequest where
+    toJSON r = object [ "term" .= requestVoteRequestTerm r
+                      , "candidateId" .= requestVoteRequestCandidateId r
+                      , "lastLogIndex" .= requestVoteRequestLastLogIndex r
+                      , "lastLogTerm" .= requestVoteRequestLastLogTerm r
+                      ]
+
 
 data RequestVoteResponse = RequestVoteResponse { requestVoteResponseTerm :: {-# UNPACK #-} !Term
                                                , requestVoteResponseVoteGranted :: !Bool
@@ -153,6 +173,11 @@ instance RPC.HasTerm RequestVoteResponse where
 
 instance RPC.RequestVoteResponse RequestVoteResponse where
     voteGranted = lens requestVoteResponseVoteGranted (\r g -> r { requestVoteResponseVoteGranted = g })
+
+instance ToJSON RequestVoteResponse where
+    toJSON r = object [ "term" .= requestVoteResponseTerm r
+                      , "voteGranted" .= requestVoteResponseVoteGranted r
+                      ]
 
 
 data AppendEntriesRequest = AppendEntriesRequest { appendEntriesRequestTerm :: {-# UNPACK #-} !Term
@@ -194,6 +219,15 @@ instance RPC.AppendEntriesRequest AppendEntriesRequest where
     entries = lens (V.toList . nestedvec . appendEntriesRequestEntries) (\r e -> r { appendEntriesRequestEntries = NestedVec (V.fromList e) })
     leaderCommit = lens appendEntriesRequestLeaderCommit (\r c -> r { appendEntriesRequestLeaderCommit = c })
 
+instance ToJSON AppendEntriesRequest where
+    toJSON r = object [ "term" .= appendEntriesRequestTerm r
+                      , "leaderId" .= appendEntriesRequestLeaderId r
+                      , "prevLogIndex" .= appendEntriesRequestPrevLogIndex r
+                      , "prevLogTerm" .= appendEntriesRequestPrevLogTerm r
+                      , "entries" .= nestedvec (appendEntriesRequestEntries r)
+                      , "leaderCommit" .= appendEntriesRequestLeaderCommit r
+                      ]
+
 
 data AppendEntriesResponse = AppendEntriesResponse { appendEntriesResponseTerm :: {-# UNPACK #-} !Term
                                                    , appendEntriesResponseSuccess :: !Bool
@@ -217,3 +251,8 @@ instance RPC.HasTerm AppendEntriesResponse where
 
 instance RPC.AppendEntriesResponse AppendEntriesResponse where
     success = lens appendEntriesResponseSuccess (\r s -> r { appendEntriesResponseSuccess = s })
+
+instance ToJSON AppendEntriesResponse where
+    toJSON r = object [ "term" .= appendEntriesResponseTerm r
+                      , "success" .= appendEntriesResponseSuccess r
+                      ]
