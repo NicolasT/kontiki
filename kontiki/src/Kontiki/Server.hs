@@ -264,7 +264,9 @@ main' = do
 
     server <- liftIO $ GRPC.mkServer
 
-    withAsync' "node" (liftIO $ GRPC.runServer undefined server) $ \grpc ->
+    withAsync' "node" (liftIO $ GRPC.runServer undefined server) $ \grpc -> do
+        link grpc
+
         withAsync' "mainloop" mainloop $ \ml -> do
             link grpc
             link ml

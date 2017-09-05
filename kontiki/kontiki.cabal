@@ -67,7 +67,6 @@ Library
                  , Kontiki.Server
                  , Kontiki.Server.EKG
                  , Kontiki.Server.GRPC
-                 , Kontiki.Server.Killswitch
                  , Kontiki.State.Persistent
                  , Kontiki.State.Volatile
                  , Kontiki.Timers
