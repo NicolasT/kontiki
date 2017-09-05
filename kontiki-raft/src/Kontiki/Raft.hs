@@ -13,6 +13,11 @@ module Kontiki.Raft (
     , S.volatileState
     , initializePersistentState
     , onRequestVoteRequest
+    , onRequestVoteResponse
+    , onAppendEntriesRequest
+    , onAppendEntriesResponse
+    , onElectionTimeout
+    , onHeartbeatTimeout
     ) where
 
 import Control.Monad.State.Class (MonadState(get, put))
@@ -29,8 +34,8 @@ import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
---import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
---import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
+import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(setCurrentTerm, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastApplied))
@@ -91,6 +96,31 @@ onRequestVoteRequest req = do
         (F.onRequestVoteRequest req)
         (C.onRequestVoteRequest req)
         (L.onRequestVoteRequest req)
+
+onRequestVoteResponse :: ( RequestVoteResponse resp
+                         )
+                      => resp
+                      -> m ()
+onRequestVoteResponse _resp = error "Not implemented"
+
+onAppendEntriesRequest :: ( AppendEntriesRequest req
+                          )
+                       => req
+                       -> m resp
+onAppendEntriesRequest _req = error "Not implemented"
+
+onAppendEntriesResponse :: ( AppendEntriesResponse resp
+                           )
+                        => resp
+                        -> m ()
+onAppendEntriesResponse _resp = error "Not implemented"
+
+onElectionTimeout :: m ()
+onElectionTimeout = error "Not implemented"
+
+onHeartbeatTimeout :: m ()
+onHeartbeatTimeout = error "Not implemented"
+
 
 dispatchHandler :: MonadState (S.SomeState v vl) m
                 => IxStateT m (S.State v vl 'S.Follower) (S.SomeState v vl) a
