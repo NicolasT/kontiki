@@ -80,7 +80,8 @@ import Control.Monad.State.Class (MonadState)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Trans.Control (
     MonadBaseControl(StM, liftBaseWith, restoreM), defaultLiftBaseWith, defaultRestoreM,
-    MonadTransControl(StT, liftWith, restoreT), defaultLiftWith, defaultRestoreT)
+    MonadTransControl(StT, liftWith, restoreT), defaultLiftWith, defaultRestoreT,
+    ComposeSt)
 import Control.Monad.Trans.Identity (IdentityT(IdentityT, runIdentityT), mapIdentityT)
 import Control.Monad.Trans.Resource (MonadResource)
 import Control.Monad.Writer.Class (MonadWriter)
@@ -143,7 +144,7 @@ deriving instance (Show1 m, Show a) => Show (KatipLoggingT ctx m a)
 deriving instance MonadResource m => MonadResource (KatipLoggingT ctx m)
 
 instance MonadBaseControl b m => MonadBaseControl b (KatipLoggingT ctx m) where
-    type StM (KatipLoggingT ctx m) a = StM (IdentityT m) a
+    type StM (KatipLoggingT ctx m) a = ComposeSt (KatipLoggingT ctx) m a
     liftBaseWith = defaultLiftBaseWith
     restoreM = defaultRestoreM
 
