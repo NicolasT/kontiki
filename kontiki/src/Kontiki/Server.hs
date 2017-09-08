@@ -182,103 +182,80 @@ main = withSocketsDo $ do
         $(logInfo) "Kontiki exiting..."
 -}
 
-import Control.Concurrent (myThreadId, threadDelay)
-import Control.Monad (forever, unless)
+import Control.Concurrent (threadDelay)
 import Data.Monoid ((<>))
 import System.IO (stderr)
 
-import GHC.Conc.Sync (labelThread)
+import Network.Socket (withSocketsDo)
 
-import Control.Monad.Catch (MonadMask)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Class (get)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.State.Strict (evalStateT)
 
-import Control.Exception.Base (AsyncException(ThreadKilled))
-import Control.Exception.Safe (SomeException, bracket, catchAny, displayException, finally, fromException, withException)
+import Control.Exception.Safe (bracket, catchAny, finally)
 
-import Control.Concurrent.Async.Lifted.Safe (Async, Forall, Pure, link, withAsync)
-
-import Data.Text (Text)
-import qualified Data.Text as Text
+import Control.Concurrent.Async.Lifted.Safe (link)
 
 import qualified Database.LevelDB.Base as DB
 
 import Katip (
-    ColorStrategy(ColorIfTerminal), KatipContext, KatipContextT, Namespace(Namespace),
-    Severity(DebugS, EmergencyS, InfoS, NoticeS), Verbosity(V2),
-    closeScribes, defaultScribeSettings, initLogEnv, katipAddContext, katipAddNamespace, logTM, ls, mkHandleScribe,
-    registerScribe, runKatipContextT, showLS, sl)
+    ColorStrategy(ColorIfTerminal), Severity(DebugS, EmergencyS, InfoS, NoticeS), Verbosity(V2),
+    closeScribes, defaultScribeSettings, initLogEnv, katipAddContext, logTM, mkHandleScribe,
+    registerScribe, showLS, sl)
 
-import Control.Monad.Logger.Katip (KatipLoggingT, runKatipLoggingT)
+import qualified System.Metrics as EKG
+import qualified Control.Monad.Metrics as Metrics
 
 import qualified Kontiki.Raft as K
 
+import qualified Kontiki.Server.EKG as EKG (forkServerWith)
 import qualified Kontiki.Server.GRPC as GRPC
+import Kontiki.Server.Monad (ServerT, runServerT, withAsync)
 import Kontiki.State.Persistent (runPersistentStateT)
 import Kontiki.State.Volatile (VolatileState)
 
-type KontikiM = KatipLoggingT KatipContext (KatipContextT IO)
-
-withAsync' :: ( Monad m
-              , MonadMask m
-              , KatipContext m
-              , MonadIO m
-              , MonadBaseControl IO m
-              , Forall (Pure m)
-              )
-           => Text
-           -> m a
-           -> (Async a -> m b)
-           -> m b
-withAsync' name act cont = flip withAsync cont $ do
-    liftIO $ do
-        tid <- myThreadId
-        labelThread tid (Text.unpack name)
-
-    katipAddNamespace ns $ flip finally logExit
-                         $ flip withException logError
-                         $ $(logTM) InfoS (name' <> " starting") >> act
+mainloop :: ServerT IO ()
+mainloop = DB.withDB "/tmp/kontiki-db" DB.defaultOptions $ \db -> runPersistentStateT db $ flip evalStateT state0 loop
   where
-    name' = ls $ Text.toTitle name
-    ns = Namespace [name]
-    logExit = $(logTM) NoticeS (name' <> " quit")
-    logError e = unless (isThreadKilled e) $
-        $(logTM) EmergencyS $ "An exception occurred: " <> ls (displayException (e :: SomeException))
-    isThreadKilled e = fromException e == Just ThreadKilled
-
-mainloop :: KontikiM ()
-mainloop = DB.withDB "/tmp/kontiki-db" DB.defaultOptions $ \db -> runPersistentStateT db $ flip evalStateT state0 $ do
-    st <- get
-    katipAddContext (sl "volatileState" st) $
-        forever $ liftIO $ threadDelay 1000000
-  where
+    loop = do
+        st <- get
+        katipAddContext (sl "volatileState" st) $
+            liftIO $ threadDelay 10000
+            -- $(logTM) InfoS  "Ping"
+        loop
     state0 = K.initialState :: K.SomeState VolatileState ()
 
 
-main' :: KontikiM ()
-main' = do
+main' :: EKG.Store -> ServerT IO a
+main' store = do
     DB.withDB "/tmp/kontiki-db" DB.defaultOptions { DB.createIfMissing = True } $ \db ->
         runPersistentStateT db K.initializePersistentState
 
-    server <- liftIO $ GRPC.mkServer
+    server <- liftIO GRPC.mkServer
 
-    withAsync' "node" (liftIO $ GRPC.runServer undefined server) $ \grpc -> do
-        link grpc
-
-        withAsync' "mainloop" mainloop $ \ml -> do
+    EKG.forkServerWith store "localhost" 8000 $ \_ekg ->
+        withAsync "node" (GRPC.runServer server) $ \grpc -> do
             link grpc
-            link ml
-            sleepForever `finally` $(logTM) NoticeS "Exiting"
+
+            withAsync "mainloop" mainloop $ \ml -> do
+                link ml
+                sleepForever `finally` $(logTM) NoticeS "Exiting"
   where
-    sleepForever = liftIO $ forever $ threadDelay (1000 * 1000 {- us -})
+    sleepForever = do
+        liftIO $ threadDelay (1000 * 1000 {- us -})
+        sleepForever
 
 main :: IO ()
-main = bracket mkLogEnv closeScribes $ \logEnv ->
-    runKatipContextT logEnv () "main" $ runKatipLoggingT @KatipContext $ do
-        $(logTM) InfoS "Starting kontiki..."
-        main' `catchAny` \e -> $(logTM) EmergencyS ("An exception occurred: " <> showLS e)
+main = withSocketsDo $ bracket mkLogEnv closeScribes $ \logEnv -> do
+        (store, metrics) <- liftIO $ do
+            store <- EKG.newStore
+            EKG.registerGcMetrics store
+            metrics <- Metrics.initializeWith store
+            return (store, metrics)
+
+        runServerT metrics logEnv () "main" $ do
+            $(logTM) InfoS "Starting kontiki..."
+            main' store `catchAny` \e -> $(logTM) EmergencyS ("An exception occurred: " <> showLS e)
   where
     mkLogEnv = do
         env <- initLogEnv "kontiki" "production"

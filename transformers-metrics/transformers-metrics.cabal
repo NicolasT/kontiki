@@ -1,0 +1,41 @@
+Name:          transformers-metrics
+Version:       0.0.0.0
+Synopsis:      A monad transformer for monad-metrics' MonadMetrics
+Category:      Kontiki
+Stability:     alpha
+
+Author:        Nicolas Trangez
+Maintainer:    ikke@nicolast.be
+Copyright:     Copyright (C) 2017 Nicolas Trangez
+License:       Apache-2.0
+License-File:  LICENSE
+Homepage:      https://github.com/NicolasT/kontiki/tree/master/transformers-metrics#readme
+Bug-Reports:   https://github.com/NicolasT/kontiki/labels/transformers-metrics
+
+Cabal-Version: >= 1.8
+Build-Type:    Simple
+
+Extra-Source-Files:
+  README.md
+
+Source-Repository head
+  Type:     git
+  Location: https://github.com/NicolasT/kontiki.git
+  Subdir:   transformers-metrics
+
+Library
+  Build-Depends:   base >= 4.9 && < 4.10
+                 , exceptions >= 0.8 && < 0.9
+                 , katip >= 0.5 && < 0.6
+                 , mmorph >= 1.0 && < 1.1
+                 , monad-control >= 1.0 && < 1.1
+                 , monad-logger >= 0.3 && < 0.4
+                 , monad-metrics >= 0.2 && < 0.3
+                 , mtl >= 2.2 && < 2.3
+                 , primitive >= 0.6 && < 0.7
+                 , resourcet >= 1.1 && < 1.2
+                 , transformers >= 0.5 && < 0.6
+                 , transformers-base >= 0.4 && < 0.5
+  Exposed-Modules: Control.Monad.Trans.Metrics
+  Hs-Source-Dirs:  src
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g

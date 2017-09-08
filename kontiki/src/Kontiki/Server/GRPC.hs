@@ -18,16 +18,24 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.TQueue (TQueue)
 import qualified Control.Concurrent.STM.TQueue as TQueue
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Monoid ((<>))
 
-import System.Clock (Clock(Realtime), getTime, toNanoSecs)
+import Control.Monad.Catch (MonadMask)
 
-import System.Metrics.Distribution (Distribution)
-import qualified System.Metrics.Distribution as Distribution
+import Control.Exception.Safe (Exception(displayException), SomeException, withException)
 
-import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), StatusCode(StatusOk), defaultServiceOptions)
+import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), ServiceOptions(logger), StatusCode(StatusOk), defaultServiceOptions)
 
+import Data.Aeson (ToJSON)
+
+import Katip (Severity(ErrorS, WarningS), katipAddContext, katipAddNamespace, logTM, ls, sl)
+
+import Kontiki.Server.Monad (ServerT, runInIO)
 import qualified Kontiki.Protocol.GRPC.Node as Server
 import qualified Kontiki.Protocol.Types as T
+
+
+import Data.Default (Default, def)
 
 data Request = RequestVote {-# UNPACK #-} !T.RequestVoteRequest !(MVar T.RequestVoteResponse)
              | AppendEntries {-# UNPACK #-} !T.AppendEntriesRequest !(MVar T.AppendEntriesResponse)
@@ -48,32 +56,36 @@ newtype Server = Server { serverQueue :: TQueue Request }
 mkServer :: IO Server
 mkServer = Server <$> TQueue.newTQueueIO
 
-runServer :: Distribution -> Server -> IO ()
-runServer stats server = Server.nodeServer impl opts
-  where
-    opts = defaultServiceOptions -- { logger = \s -> _ } -- $(logError) (Text.pack s) }
-    impl = Server.Node { Server.nodeRequestVote = handler stats server RequestVote
-                       , Server.nodeAppendEntries = handler stats server AppendEntries
-                       }
+runServer :: Server -> ServerT IO ()
+runServer server = katipAddNamespace "grpc" $ do
+
+    logger' <- runInIO ($(logTM) WarningS . ls)
+    nrv <- runInIO $ handler server RequestVote
+    nae <- runInIO $ handler server AppendEntries
+
+    let opts = defaultServiceOptions { logger = logger' }
+        impl = Server.Node { Server.nodeRequestVote = nrv
+                           , Server.nodeAppendEntries = nae
+                           }
+
+    liftIO $ Server.nodeServer impl opts
 
 handler :: ( MonadIO m
-           , Show req
-           , Show resp
+           , MonadMask m
+           , ToJSON req
+           , Default resp
            )
-        => Distribution
-        -> Server
+        => Server
         -> (req -> MVar resp -> Request)
         -> ServerRequest 'Normal req resp
-        -> m (ServerResponse 'Normal resp)
-handler stats server wrapper (ServerNormalRequest _meta req) = do
-    start <- liftIO $ getTime Realtime
-    res <- liftIO $ do
-        resBox <- MVar.newEmptyMVar
-        atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
-        res <- MVar.takeMVar resBox
-        return (ServerNormalResponse res mempty StatusOk "")
-    liftIO $ do
-        end <- liftIO $ getTime Realtime
-        let diff = toNanoSecs end - toNanoSecs start
-        Distribution.add stats (fromIntegral diff)
-    return res
+        -> ServerT m (ServerResponse 'Normal resp)
+handler server wrapper (ServerNormalRequest _meta req) =
+    katipAddContext (sl "request" req) $
+        flip withException handleException $ liftIO $ do
+            resBox <- MVar.newEmptyMVar
+            -- atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
+            MVar.putMVar resBox def
+            res <- MVar.takeMVar resBox
+            return (ServerNormalResponse res mempty StatusOk "")
+  where
+    handleException e = $(logTM) ErrorS $ "An exception occurred: " <> ls (displayException (e :: SomeException))
