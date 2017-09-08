@@ -111,6 +111,7 @@ Test-Suite kontiki-test
                  , hspec-expectations >= 0.8 && < 0.9
                  , leveldb-haskell >= 0.6 && < 0.7
                  , monad-logger >= 0.3 && < 0.4
+                 , monad-metrics >= 0.2 && < 0.3
                  , proto3-suite >= 0.1 && < 0.2
                  , QuickCheck >= 2.9 && < 2.10
                  , tasty >= 0.11 && < 0.12

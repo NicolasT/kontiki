@@ -5,6 +5,8 @@ import System.IO.Temp (withSystemTempDirectory)
 
 import Control.Monad.Logger (runNoLoggingT)
 
+import qualified Control.Monad.Metrics as Metrics
+
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec)
 
@@ -18,15 +20,15 @@ import qualified Kontiki.Raft.Classes.State.Persistent as K
 import Kontiki.State.Persistent (runPersistentStateT)
 
 withDatabase :: (L.DB -> IO ()) -> IO ()
-withDatabase fn = withSystemTempDirectory "kontiki-test" $ \dir -> do
+withDatabase fn = withSystemTempDirectory "kontiki-test" $ \dir ->
     L.withDB dir (L.defaultOptions { L.createIfMissing = True }) fn
 
 tests :: IO TestTree
-tests = testSpec "Kontiki.State.Persistent" $ do
+tests = testSpec "Kontiki.State.Persistent" $
     around withDatabase $ do
-        describe "get/setCurrentTerm" $ do
+        describe "get/setCurrentTerm" $
             it "correctly stores new values" $ \db -> property $ \t -> do
-                (t0, t', t0') <- runNoLoggingT $ runPersistentStateT db $ do
+                (t0, t', t0') <- runNoLoggingT $ Metrics.run $ runPersistentStateT db $ do
                     K.setCurrentTerm K.term0
                     t0 <- K.getCurrentTerm
                     K.setCurrentTerm t
@@ -38,9 +40,9 @@ tests = testSpec "Kontiki.State.Persistent" $ do
                 t' `shouldBe` t
                 t0' `shouldBe` K.term0
 
-        describe "get/setVotedFor" $ do
+        describe "get/setVotedFor" $
             it "correctly stores new values" $ \db -> property $ \v -> do
-                (v0, v', v0') <- runNoLoggingT $ runPersistentStateT db $ do
+                (v0, v', v0') <- runNoLoggingT $ Metrics.run $ runPersistentStateT db $ do
                     K.setVotedFor Nothing
                     v0 <- K.getVotedFor
                     K.setVotedFor v

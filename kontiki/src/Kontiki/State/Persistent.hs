@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.State.Persistent (
@@ -27,6 +28,9 @@ import qualified Database.LevelDB as L
 
 import qualified Proto3.Suite.Class as Proto3
 
+import Control.Monad.Metrics (MonadMetrics)
+import qualified Control.Monad.Metrics as Metrics
+
 import Kontiki.Raft.Classes.State.Persistent
     (MonadPersistentState(Term, Node, Entry, Index,
                           getCurrentTerm, setCurrentTerm,
@@ -48,7 +52,7 @@ currentTermKey, votedForKey :: BS8.ByteString
 currentTermKey = BS8.pack "currentTerm"
 votedForKey = BS8.pack "votedFor"
 
-instance (Monad m, MonadIO m) => MonadPersistentState (PersistentStateT m) where
+instance (Monad m, MonadIO m, MonadMetrics m) => MonadPersistentState (PersistentStateT m) where
     type Term (PersistentStateT m) = T.Term
     type Node (PersistentStateT m) = T.Node
     type Entry (PersistentStateT m) = T.Entry
@@ -77,10 +81,10 @@ maybeNode = maybe (MaybeNode True def) (MaybeNode False)
 unMaybeNode :: MaybeNode -> Maybe T.Node
 unMaybeNode mn = if maybeNodeIsNull mn then Nothing else Just (maybeNodeNode mn)
 
-doGet :: (Proto3.Message a, MonadIO m)
+doGet :: (Proto3.Message a, MonadIO m, MonadMetrics m)
       => BS8.ByteString
       -> PersistentStateT m a
-doGet key = PersistentStateT $ do
+doGet key = PersistentStateT $ Metrics.timed' Metrics.Milliseconds "kontiki.db.get" $ do
     db <- ask
     L.get db L.defaultReadOptions key >>= \case
         Nothing -> error $ "Database not properly initialized: key " ++ show key ++ " not found"
@@ -89,10 +93,10 @@ doGet key = PersistentStateT $ do
             -- TODO Urgh
             return $! either (error "Urgh") id v'
 
-doPut :: (Proto3.Message a, MonadIO m)
+doPut :: (Proto3.Message a, MonadIO m, MonadMetrics m)
       => BS8.ByteString
       -> a
       -> PersistentStateT m ()
-doPut key a = PersistentStateT $ do
+doPut key a = PersistentStateT $ Metrics.timed' Metrics.Milliseconds "kontiki.db.put" $ do
     db <- ask
     L.put db L.defaultWriteOptions key (BS.toStrict $ Proto3.toLazyByteString a)

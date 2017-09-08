@@ -11,6 +11,7 @@ module Kontiki.Timers (
     ) where
 
 import Control.Monad (void)
+import Control.Monad.Trans.Class (MonadTrans)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -23,10 +24,12 @@ import qualified Control.Concurrent.STM.TQueue as TQueue
 import Control.Concurrent.Suspend (Delay)
 import Control.Concurrent.Timer (TimerIO, newTimer, oneShotStart, stopTimer)
 
+import Katip (Katip, KatipContext)
+
 import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer, cancelElectionTimer, startHeartbeatTimer))
 
 newtype TimersT m a = TimersT { unTimersT :: ReaderT Timers m a }
-    deriving (Functor, Applicative, Monad, MonadIO, MonadLogger)
+    deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadLogger, Katip, KatipContext)
 
 instance (Monad m, MonadIO m) => MonadTimers (TimersT m) where
     startElectionTimer = TimersT $ do

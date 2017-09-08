@@ -24,6 +24,8 @@ import Control.Monad.Catch (MonadMask)
 
 import Control.Exception.Safe (Exception(displayException), SomeException, withException)
 
+import qualified Control.Monad.Metrics as Metrics
+
 import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), ServiceOptions(logger), StatusCode(StatusOk), defaultServiceOptions)
 
 import Data.Aeson (ToJSON)
@@ -33,9 +35,6 @@ import Katip (Severity(ErrorS, WarningS), katipAddContext, katipAddNamespace, lo
 import Kontiki.Server.Monad (ServerT, runInIO)
 import qualified Kontiki.Protocol.GRPC.Node as Server
 import qualified Kontiki.Protocol.Types as T
-
-
-import Data.Default (Default, def)
 
 data Request = RequestVote {-# UNPACK #-} !T.RequestVoteRequest !(MVar T.RequestVoteResponse)
              | AppendEntries {-# UNPACK #-} !T.AppendEntriesRequest !(MVar T.AppendEntriesResponse)
@@ -73,18 +72,16 @@ runServer server = katipAddNamespace "grpc" $ do
 handler :: ( MonadIO m
            , MonadMask m
            , ToJSON req
-           , Default resp
            )
         => Server
         -> (req -> MVar resp -> Request)
         -> ServerRequest 'Normal req resp
         -> ServerT m (ServerResponse 'Normal resp)
 handler server wrapper (ServerNormalRequest _meta req) =
-    katipAddContext (sl "request" req) $
+    katipAddContext (sl "request" req) $ Metrics.timed' Metrics.Milliseconds "kontiki.rpc" $
         flip withException handleException $ liftIO $ do
             resBox <- MVar.newEmptyMVar
-            -- atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
-            MVar.putMVar resBox def
+            atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
             res <- MVar.takeMVar resBox
             return (ServerNormalResponse res mempty StatusOk "")
   where

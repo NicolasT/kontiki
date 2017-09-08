@@ -6,27 +6,19 @@
 
 module Kontiki.Server.EKG (
       forkServerWith
-    , registerStats
     ) where
 
 import Control.Concurrent (killThread, threadDelay)
-import Control.Concurrent.MVar (MVar, readMVar)
-
-import Control.Lens (view)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Logger (runNoLoggingT)
 
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Catch (MonadMask)
 
 import Data.Monoid ((<>))
 
-import Database.LevelDB.Base (DB)
-
 import Control.Exception.Safe (bracket)
 
-import qualified Data.HashMap.Lazy as Map
 import qualified System.Metrics as EKG
 import qualified System.Remote.Monitoring as EKG
 
@@ -37,15 +29,9 @@ import Control.Concurrent.Async.Lifted.Safe (Async, Forall, Pure)
 
 import Katip (KatipContext, Severity(InfoS), logTM, ls)
 
-import qualified Kontiki.Raft.Classes.State.Persistent as K
-import qualified Kontiki.Raft.Classes.State.Volatile as K
-import qualified Kontiki.Raft as K
-
-import Kontiki.Protocol.Types (Index(getIndex), Node(getNode), Term(getTerm))
 import Kontiki.Server.Async (withAsync)
-import Kontiki.State.Persistent (runPersistentStateT)
-import Kontiki.State.Volatile (VolatileState)
 
+{-
 registerStats :: DB -> MVar (K.SomeState VolatileState ()) -> EKG.Store -> IO ()
 registerStats db state store = do
     let dbStats = Map.fromList [ ("kontiki.node.votedFor", EKG.Label . maybe "" getNode . fst)
@@ -64,7 +50,7 @@ registerStats db state store = do
                                   , ("kontiki.node.lastApplied", EKG.Gauge . fromIntegral . getIndex . view K.lastApplied . K.volatileState)
                                   ]
     EKG.registerGroup stateStats (readMVar state) store
-
+-}
 
 forkServerWith :: ( MonadIO m
                   , MonadBaseControl IO m

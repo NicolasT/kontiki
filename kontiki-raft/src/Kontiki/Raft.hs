@@ -115,8 +115,8 @@ onAppendEntriesResponse :: ( AppendEntriesResponse resp
                         -> m ()
 onAppendEntriesResponse _resp = error "Not implemented"
 
-onElectionTimeout :: m ()
-onElectionTimeout = error "Not implemented"
+onElectionTimeout :: Monad m => m ()
+onElectionTimeout = return () -- error "Not implemented"
 
 onHeartbeatTimeout :: m ()
 onHeartbeatTimeout = error "Not implemented"
