@@ -46,6 +46,7 @@ Library
                  , Kontiki.Raft.Internal.Follower
                  , Kontiki.Raft.Internal.Leader
                  , Kontiki.Raft.Internal.State
+  Other-Modules:   Kontiki.Raft.Internal.Orphans
   Hs-Source-Dirs:  src
   Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
 

@@ -189,6 +189,7 @@ onElectionTimeout :: ( MonadState (S.SomeState v vl) m
 onElectionTimeout = dispatchHandler F.onElectionTimeout C.onElectionTimeout L.onElectionTimeout
 
 onHeartbeatTimeout :: ( MonadState (S.SomeState v vl) m
+                      , MonadLogger m
                       , HasCallStack
                       )
                    => m ()

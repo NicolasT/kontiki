@@ -26,12 +26,12 @@ import qualified Kontiki.Protocol.Types as KPT
 newtype RPCT m a = RPCT { unRPCT :: IdentityT m a }
     deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadCatch, MonadMask, MonadThrow, MonadLogger)
 
-instance MonadRPC (RPCT m) where
+instance Monad m => MonadRPC (RPCT m) where
     type Node (RPCT m) = KPT.Node
     type RequestVoteRequest (RPCT m) = KPT.RequestVoteRequest
     type AppendEntriesRequest (RPCT m) = KPT.AppendEntriesRequest
 
-    broadcastRequestVoteRequest _req = error "Not implemented"
+    broadcastRequestVoteRequest _req = return ()--error "Not implemented"
     sendAppendEntriesRequest _n _req = error "Not implemented"
 
 

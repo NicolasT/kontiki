@@ -2,8 +2,10 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-missing-import-lists #-}
@@ -18,8 +20,10 @@ module Kontiki.Raft.Internal.Follower (
     , onHeartbeatTimeout
     ) where
 
-import Prelude hiding ((>>=), (>>), return)
+import Prelude hiding ((>>), (>>=), return)
 import qualified Prelude
+
+import Data.String (fromString)
 
 import GHC.Stack (HasCallStack)
 
@@ -34,6 +38,8 @@ import Control.Monad.Indexed.State (IxMonadState, imodify)
 import Control.Lens ((&), (.~), (^.))
 
 import Data.Default.Class (Default(def))
+
+import Control.Monad.Logger (MonadLogger, logDebug)
 
 import Kontiki.Raft.Classes.Config (MonadConfig)
 import qualified Kontiki.Raft.Classes.Config as Config
@@ -50,6 +56,7 @@ import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer))
 import qualified Kontiki.Raft.Classes.Types as T
 
 import Kontiki.Raft.Internal.Candidate (convertToCandidate)
+import Kontiki.Raft.Internal.Orphans ()
 import Kontiki.Raft.Internal.State (Role(Candidate, Follower), State(F), SomeState(SomeState))
 
 convertToFollower :: ( Monad m
@@ -119,20 +126,32 @@ onRequestVoteRequest req = do
         True -> a
         False -> b
 
-onRequestVoteResponse :: HasCallStack
+onRequestVoteResponse :: forall a m vs vls.
+                         ( IxMonadState m
+                         , MonadLogger (m (State vs vls 'Follower) (State vs vls 'Follower))
+                         , HasCallStack
+                         )
                       => a
-                      -> b
-onRequestVoteResponse _ = error "Not implemented"
+                      -> m (State vs vls 'Follower) (SomeState vs vls) ()
+onRequestVoteResponse _ =
+    ($(logDebug) "Received RequestVote response in Follower mode, ignoring" :: m (State vs vls 'Follower) (State vs vls 'Follower) ())
+        >>> imodify SomeState
 
 onAppendEntriesRequest :: HasCallStack
                        => a
                        -> b
 onAppendEntriesRequest _ = error "Not implemented"
 
-onAppendEntriesResponse :: HasCallStack
+onAppendEntriesResponse :: forall a m vs vls.
+                           ( IxMonadState m
+                           , MonadLogger (m (State vs vls 'Follower) (State vs vls 'Follower))
+                           , HasCallStack
+                           )
                         => a
-                        -> b
-onAppendEntriesResponse _ = error "Not implemented"
+                        -> m (State vs vls 'Follower) (SomeState vs vls) ()
+onAppendEntriesResponse _ =
+    ($(logDebug) "Received AppendEntries response in Follower mode, ignoring" :: m (State vs vls 'Follower) (State vs vls 'Follower) ())
+        >>> imodify SomeState
 
 onElectionTimeout :: forall m vs vls requestVoteRequest index term node.
                      ( IxMonadState m
@@ -157,12 +176,18 @@ onElectionTimeout :: forall m vs vls requestVoteRequest index term node.
                      , HasCallStack
                      )
                   => m (State vs vls 'Follower) (SomeState vs vls) ()
-onElectionTimeout = convertToCandidate >>>= imodify SomeState
+onElectionTimeout = convertToCandidate >>> imodify SomeState
 
-onHeartbeatTimeout :: HasCallStack => a
-onHeartbeatTimeout = error "Not implemented"
+onHeartbeatTimeout :: forall m vs vls.
+                      ( IxMonadState m
+                      , MonadLogger (m (State vs vls 'Follower) (State vs vls 'Follower))
+                      , HasCallStack)
+                   => m (State vs vls 'Follower) (SomeState vs vls) ()
+onHeartbeatTimeout =
+    ($(logDebug) "Heartbeat timeout in Follower mode, ignoring" :: m (State vs vls 'Follower) (State vs vls 'Follower) ())
+        >>> imodify SomeState
 
 
-(>>>=) :: Ix.IxMonad m => m i j a -> m j k b -> m i k b
-m >>>= n = Ix.ibind (const n) m
-{-# INLINE (>>>=) #-}
+(>>>) :: Ix.IxMonad m => m i j a -> m j k b -> m i k b
+m >>> n = Ix.ibind (const n) m
+{-# INLINE (>>>) #-}
