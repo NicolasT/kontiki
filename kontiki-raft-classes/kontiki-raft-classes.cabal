@@ -39,7 +39,8 @@ Library
                  , tasty >= 0.11 && < 0.12
                  , tasty-quickcheck >= 0.8 && < 0.9
                  , transformers >= 0.5 && < 0.6
-  Exposed-Modules: Kontiki.Raft.Classes.FSM
+  Exposed-Modules: Kontiki.Raft.Classes.Config
+                 , Kontiki.Raft.Classes.FSM
                  , Kontiki.Raft.Classes.RPC
                  , Kontiki.Raft.Classes.RPC.AppendEntriesRequest
                  , Kontiki.Raft.Classes.RPC.AppendEntriesResponse

@@ -69,6 +69,10 @@ class MonadPersistentState m where
     default setLogEntry :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => Index m' -> Term m' -> Entry m' -> m ()
     setLogEntry i t e = lift $ setLogEntry i t e
     {-# INLINE setLogEntry #-}
+    lastLogEntry :: m (Maybe (Index m, Term m, Entry m))
+    default lastLogEntry :: (Monad m', MonadPersistentState m', MonadTrans t, m ~ t m') => m (Maybe (Index m', Term m', Entry m'))
+    lastLogEntry = lift lastLogEntry
+    {-# INLINE lastLogEntry #-}
 
 
 instance (Monad m, MonadPersistentState m) => MonadPersistentState (StateT s m) where
@@ -95,3 +99,4 @@ instance (Monad m, MonadPersistentState m) => MonadPersistentState (IxStateT m i
     setVotedFor = ilift . setVotedFor
     getLogEntry = ilift . getLogEntry
     setLogEntry i t e = ilift $ setLogEntry i t e
+    lastLogEntry = ilift lastLogEntry

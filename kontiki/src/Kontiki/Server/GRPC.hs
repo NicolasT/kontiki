@@ -20,9 +20,9 @@ import qualified Control.Concurrent.STM.TQueue as TQueue
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid ((<>))
 
-import Control.Monad.Catch (MonadMask)
+import Control.Monad.Catch (MonadCatch, MonadMask)
 
-import Control.Exception.Safe (Exception(displayException), SomeException, withException)
+import Control.Exception.Safe (Exception(displayException), SomeException, throwM, tryAny, withException)
 
 import qualified Control.Monad.Metrics as Metrics
 
@@ -36,19 +36,21 @@ import Kontiki.Server.Monad (ServerT, runInIO)
 import qualified Kontiki.Protocol.GRPC.Node as Server
 import qualified Kontiki.Protocol.Types as T
 
-data Request = RequestVote {-# UNPACK #-} !T.RequestVoteRequest !(MVar T.RequestVoteResponse)
-             | AppendEntries {-# UNPACK #-} !T.AppendEntriesRequest !(MVar T.AppendEntriesResponse)
+data Request = RequestVote {-# UNPACK #-} !T.RequestVoteRequest !(MVar (Either SomeException T.RequestVoteResponse))
+             | AppendEntries {-# UNPACK #-} !T.AppendEntriesRequest !(MVar (Either SomeException T.AppendEntriesResponse))
 
 data RequestHandler m = RequestHandler { onRequestVote :: T.RequestVoteRequest -> m T.RequestVoteResponse
                                        , onAppendEntries :: T.AppendEntriesRequest -> m T.AppendEntriesResponse
                                        }
 
-readRequest :: (Monad m, MonadIO m) => Server -> STM (RequestHandler m -> m ())
+readRequest :: (Monad m, MonadIO m, MonadCatch m) => Server -> STM (RequestHandler m -> m ())
 readRequest Server{..} = do
     req <- TQueue.readTQueue serverQueue
     return $ \RequestHandler{..} -> case req of
-        RequestVote req' mvar -> onRequestVote req' >>= liftIO . MVar.putMVar mvar
-        AppendEntries req' mvar -> onAppendEntries req' >>= liftIO . MVar.putMVar mvar
+        RequestVote req' mvar ->
+            tryAny (onRequestVote req') >>= liftIO . MVar.putMVar mvar
+        AppendEntries req' mvar ->
+            tryAny(onAppendEntries req') >>= liftIO . MVar.putMVar mvar
 
 newtype Server = Server { serverQueue :: TQueue Request }
 
@@ -74,7 +76,7 @@ handler :: ( MonadIO m
            , ToJSON req
            )
         => Server
-        -> (req -> MVar resp -> Request)
+        -> (req -> MVar (Either SomeException resp) -> Request)
         -> ServerRequest 'Normal req resp
         -> ServerT m (ServerResponse 'Normal resp)
 handler server wrapper (ServerNormalRequest _meta req) =
@@ -83,6 +85,8 @@ handler server wrapper (ServerNormalRequest _meta req) =
             resBox <- MVar.newEmptyMVar
             atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
             res <- MVar.takeMVar resBox
-            return (ServerNormalResponse res mempty StatusOk "")
+            case res of
+                Left err -> throwM err
+                Right res' -> return (ServerNormalResponse res' mempty StatusOk "")
   where
-    handleException e = $(logTM) ErrorS $ "An exception occurred: " <> ls (displayException (e :: SomeException))
+    handleException e = $(logTM) ErrorS $ "Exception: " <> ls (displayException (e :: SomeException))

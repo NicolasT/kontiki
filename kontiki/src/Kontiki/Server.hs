@@ -25,7 +25,7 @@ import Control.Concurrent.Async.Lifted.Safe (link)
 import qualified Database.LevelDB.Base as DB
 
 import Katip (
-    ColorStrategy(ColorIfTerminal), Severity(DebugS, EmergencyS, InfoS, NoticeS), Verbosity(V0),
+    ColorStrategy(ColorIfTerminal), Severity(DebugS, EmergencyS, InfoS, NoticeS), Verbosity(V2),
     closeScribes, defaultScribeSettings, initLogEnv, katipAddContext, logTM, mkHandleScribe,
     registerScribe, showLS, sl)
 
@@ -36,6 +36,9 @@ import Control.Concurrent.Suspend (msDelay, sDelay)
 
 import qualified Kontiki.Raft as K
 
+import Kontiki.Config (Config(Config, configNode), runConfigT)
+import Kontiki.Protocol.Types (Node(Node))
+import Kontiki.RPC (runRPCT)
 import qualified Kontiki.Server.EKG as EKG (forkServerWith)
 import qualified Kontiki.Server.GRPC as GRPC
 import Kontiki.Server.Monad (ServerT, runServerT, withAsync)
@@ -46,10 +49,12 @@ import Kontiki.State.Volatile (VolatileState)
 data MainloopEvent m = Timeout (Timers.TimeoutHandler m -> m ())
                      | GRPCRequest (GRPC.RequestHandler m -> m ())
 
-mainloop :: GRPC.Server -> Timers.Timers -> ServerT IO ()
-mainloop server timers = DB.withDB "/tmp/kontiki-db" DB.defaultOptions $ \db ->
+mainloop :: Config -> GRPC.Server -> Timers.Timers -> ServerT IO ()
+mainloop config server timers = DB.withDB "/tmp/kontiki-db" DB.defaultOptions $ \db ->
                                                                   Timers.runTimersT timers
                                                                 $ runPersistentStateT db
+                                                                $ runRPCT
+                                                                $ runConfigT config
                                                                 $ evalStateT loop state0
   where
     loop = do
@@ -100,13 +105,14 @@ main' store = do
         withAsync "node" (GRPC.runServer server) $ \grpc -> do
             link grpc
 
-            withAsync "mainloop" (mainloop server timers) $ \ml -> do
+            withAsync "mainloop" (mainloop config server timers) $ \ml -> do
                 link ml
                 sleepForever `finally` $(logTM) NoticeS "Exiting"
   where
     sleepForever = do
         liftIO $ threadDelay (1000 * 1000 {- us -})
         sleepForever
+    config = Config { configNode = Node "localhost" }
 
 main :: IO ()
 main = withSocketsDo $ bracket mkLogEnv closeScribes $ \logEnv -> do
@@ -118,9 +124,9 @@ main = withSocketsDo $ bracket mkLogEnv closeScribes $ \logEnv -> do
 
         runServerT metrics logEnv () "main" $ do
             $(logTM) InfoS "Starting kontiki..."
-            main' store `catchAny` \e -> $(logTM) EmergencyS ("An exception occurred: " <> showLS e)
+            main' store `catchAny` \e -> $(logTM) EmergencyS ("Exception: " <> showLS e)
   where
     mkLogEnv = do
         env <- initLogEnv "kontiki" "production"
-        scribe <- mkHandleScribe ColorIfTerminal stderr InfoS V0
+        scribe <- mkHandleScribe ColorIfTerminal stderr DebugS V2
         registerScribe "stderr" scribe defaultScribeSettings env

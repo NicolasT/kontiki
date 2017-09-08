@@ -9,3 +9,4 @@ class Index i where
 
 class Term i where
     term0 :: i
+    succTerm :: i -> i

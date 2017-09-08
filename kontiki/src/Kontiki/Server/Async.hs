@@ -48,6 +48,6 @@ withAsync name act cont = flip Async.withAsync cont $ do
     logExit = $(logTM) NoticeS (name' <> " quit")
     logError e =
         if not (isThreadKilled e)
-            then $(logTM) EmergencyS $ "An exception occurred: " <> ls (displayException (e :: SomeException))
+            then $(logTM) EmergencyS $ "Exception: " <> ls (displayException (e :: SomeException))
             else $(logTM) InfoS "Thread killed"
     isThreadKilled e = fromException e == Just ThreadKilled

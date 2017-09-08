@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Timers (
       TimersT
@@ -24,12 +25,18 @@ import qualified Control.Concurrent.STM.TQueue as TQueue
 import Control.Concurrent.Suspend (Delay)
 import Control.Concurrent.Timer (TimerIO, newTimer, oneShotStart, stopTimer)
 
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
+
 import Katip (Katip, KatipContext)
 
+import qualified Kontiki.Raft.Classes.Config as C
+import Kontiki.Raft.Classes.RPC (MonadRPC)
+import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer, cancelElectionTimer, startHeartbeatTimer))
 
 newtype TimersT m a = TimersT { unTimersT :: ReaderT Timers m a }
-    deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadLogger, Katip, KatipContext)
+    deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadLogger, Katip, KatipContext,
+              MonadCatch, MonadMask, MonadThrow)
 
 instance (Monad m, MonadIO m) => MonadTimers (TimersT m) where
     startElectionTimer = TimersT $ do
@@ -44,6 +51,13 @@ instance (Monad m, MonadIO m) => MonadTimers (TimersT m) where
         d <- liftIO $ timersMkHeartbeatTimeout ts
         void $ liftIO $ oneShotStart (timersHeartbeatTimer ts) (atomically $ TQueue.writeTQueue (timersQueue ts) HeartbeatTimeout) d
 
+instance (Monad m, MonadRPC m) => MonadRPC (TimersT m) where
+    type Node (TimersT m) = RPC.Node m
+    type RequestVoteRequest (TimersT m) = RPC.RequestVoteRequest m
+    type AppendEntriesRequest (TimersT m) = RPC.AppendEntriesRequest m
+
+instance (Monad m, C.MonadConfig m) => C.MonadConfig (TimersT m) where
+    type Node (TimersT m) = C.Node m
 
 data Timeout = ElectionTimeout
              | HeartbeatTimeout

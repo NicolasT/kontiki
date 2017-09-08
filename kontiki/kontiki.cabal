@@ -65,8 +65,10 @@ Library
                  , vector >= 0.12 && < 0.13
                  , kontiki-raft
                  , kontiki-raft-classes
-  Exposed-Modules: Kontiki.Protocol.GRPC.Node
+  Exposed-Modules: Kontiki.Config
+                 , Kontiki.Protocol.GRPC.Node
                  , Kontiki.Protocol.Types
+                 , Kontiki.RPC
                  , Kontiki.Server
                  , Kontiki.Server.Async
                  , Kontiki.Server.EKG

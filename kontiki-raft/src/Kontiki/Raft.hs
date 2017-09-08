@@ -20,6 +20,8 @@ module Kontiki.Raft (
     , onHeartbeatTimeout
     ) where
 
+import GHC.Stack (HasCallStack)
+
 import Control.Monad.State.Class (MonadState(get, put))
 
 import Control.Lens ((&), (.~))
@@ -30,6 +32,9 @@ import Control.Monad.Indexed.State (IxStateT(runIxStateT))
 
 import Control.Monad.Logger (MonadLogger, logInfo)
 
+import Kontiki.Raft.Classes.Config (MonadConfig)
+import qualified Kontiki.Raft.Classes.Config as Config
+import Kontiki.Raft.Classes.RPC (MonadRPC)
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
@@ -87,6 +92,7 @@ onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderSt
                         , Default resp
                         , Eq node
                         , MonadTimers m
+                        , HasCallStack
                         )
                      => req
                      -> m resp
@@ -98,31 +104,100 @@ onRequestVoteRequest req = do
         (L.onRequestVoteRequest req)
 
 onRequestVoteResponse :: ( RequestVoteResponse resp
+                         , MonadPersistentState m
+                         , MonadState (S.SomeState volatileState volatileLeaderState) m
+                         , MonadLogger m
+                         , MonadTimers m
+                         , VolatileState volatileState
+                         , Default volatileState
+                         , RPC.Term resp ~ term
+                         , P.Term m ~ term
+                         , Ord term
+                         , HasCallStack
                          )
                       => resp
                       -> m ()
-onRequestVoteResponse _resp = error "Not implemented"
+onRequestVoteResponse resp = do
+    A.checkTerm resp
+    dispatchHandler
+        (F.onRequestVoteResponse resp)
+        (C.onRequestVoteResponse resp)
+        (L.onRequestVoteResponse resp)
 
 onAppendEntriesRequest :: ( AppendEntriesRequest req
+                          , MonadPersistentState m
+                          , MonadState (S.SomeState volatileState volatileLeaderState) m
+                          , MonadLogger m
+                          , MonadTimers m
+                          , VolatileState volatileState
+                          , Default volatileState
+                          , RPC.Term req ~ term
+                          , P.Term m ~ term
+                          , Ord term
+                          , HasCallStack
                           )
                        => req
                        -> m resp
-onAppendEntriesRequest _req = error "Not implemented"
+onAppendEntriesRequest req = do
+    A.checkTerm req
+    dispatchHandler
+        (F.onAppendEntriesRequest req)
+        (C.onAppendEntriesRequest req)
+        (L.onAppendEntriesRequest req)
 
 onAppendEntriesResponse :: ( AppendEntriesResponse resp
+                           , MonadPersistentState m
+                           , MonadState (S.SomeState volatileState volatileLeaderState) m
+                           , MonadLogger m
+                           , MonadTimers m
+                           , VolatileState volatileState
+                           , Default volatileState
+                           , RPC.Term resp ~ term
+                           , P.Term m ~ term
+                           , Ord term
+                           , HasCallStack
                            )
                         => resp
                         -> m ()
-onAppendEntriesResponse _resp = error "Not implemented"
+onAppendEntriesResponse resp = do
+    A.checkTerm resp
+    dispatchHandler
+        (F.onAppendEntriesResponse resp)
+        (C.onAppendEntriesResponse resp)
+        (L.onAppendEntriesResponse resp)
 
-onElectionTimeout :: Monad m => m ()
-onElectionTimeout = return () -- error "Not implemented"
+onElectionTimeout :: ( MonadState (S.SomeState v vl) m
+                     , MonadConfig m
+                     , MonadRPC m
+                     , MonadTimers m
+                     , MonadPersistentState m
+                     , VolatileState v
+                     , Term term
+                     , Index index
+                     , Default v
+                     , Default (RPC.RequestVoteRequest m)
+                     , RequestVoteRequest (RPC.RequestVoteRequest m)
+                     , RPC.Term (RPC.RequestVoteRequest m) ~ term
+                     , P.Term m ~ term
+                     , RVReq.Index (RPC.RequestVoteRequest m) ~ index
+                     , P.Index m ~ index
+                     , RVReq.Node (RPC.RequestVoteRequest m) ~ node
+                     , Config.Node m ~ node
+                     , HasCallStack
+                     )
+                  => m ()
+onElectionTimeout = dispatchHandler F.onElectionTimeout C.onElectionTimeout L.onElectionTimeout
 
-onHeartbeatTimeout :: m ()
-onHeartbeatTimeout = error "Not implemented"
+onHeartbeatTimeout :: ( MonadState (S.SomeState v vl) m
+                      , HasCallStack
+                      )
+                   => m ()
+onHeartbeatTimeout = dispatchHandler F.onHeartbeatTimeout C.onHeartbeatTimeout L.onHeartbeatTimeout
 
 
-dispatchHandler :: MonadState (S.SomeState v vl) m
+dispatchHandler :: ( MonadState (S.SomeState v vl) m
+                   , HasCallStack
+                   )
                 => IxStateT m (S.State v vl 'S.Follower) (S.SomeState v vl) a
                 -> IxStateT m (S.State v vl 'S.Candidate) (S.SomeState v vl) a
                 -> IxStateT m (S.State v vl 'S.Leader) (S.SomeState v vl) a

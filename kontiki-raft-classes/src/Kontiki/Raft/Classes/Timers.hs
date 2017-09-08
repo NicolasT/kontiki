@@ -1,9 +1,13 @@
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Raft.Classes.Timers (
       MonadTimers(..)
     ) where
+
+import Control.Monad.Indexed.State (IxStateT)
+import Control.Monad.Indexed.Trans (ilift)
 
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Trans.Reader (ReaderT)
@@ -28,3 +32,8 @@ class MonadTimers m where
 instance (Monad m, MonadTimers m) => MonadTimers (ReaderT r m)
 instance (Monad m, MonadTimers m) => MonadTimers (StateT s m)
 instance (Monad m, MonadTimers m) => MonadTimers (SStateT.StateT s m)
+
+instance (Monad m, MonadTimers m) => MonadTimers (IxStateT m i i) where
+    startElectionTimer = ilift startElectionTimer
+    cancelElectionTimer = ilift cancelElectionTimer
+    startHeartbeatTimer = ilift startHeartbeatTimer

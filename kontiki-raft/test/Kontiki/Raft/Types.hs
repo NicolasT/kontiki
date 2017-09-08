@@ -47,6 +47,7 @@ newtype Term = Term { getTerm :: Word64 }
 
 instance T.Term Term where
     term0 = Term 0
+    succTerm = Term . succ . getTerm
 
 instance Arbitrary Term where
     arbitrary = Term <$> arbitrary
@@ -209,6 +210,7 @@ instance Monad m => P.MonadPersistentState (PersistentStateT m) where
 
     getLogEntry = error "Not implemented"
     setLogEntry = error "Not implemented"
+    lastLogEntry = error "Not implemented"
 
 runPersistentStateT :: PersistentState -> PersistentStateT m a -> m (a, PersistentState)
 runPersistentStateT s a = runStateT (unPersistentStateT a) s

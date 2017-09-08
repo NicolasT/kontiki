@@ -56,6 +56,7 @@ instance Arbitrary Term where
 
 instance T.Term Term where
     term0 = Term 0
+    succTerm = Term . succ . getTerm
 
 instance ToJSON Term where
     toJSON = toJSON . getTerm
