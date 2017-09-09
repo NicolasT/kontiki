@@ -31,8 +31,9 @@ import Data.Default.Class (Default(def))
 import Control.Monad.Indexed.State (IxStateT(runIxStateT))
 
 import Control.Monad.Logger (MonadLogger, logInfo)
+import Control.Monad.Reader (MonadReader)
 
-import Kontiki.Raft.Classes.Config (MonadConfig)
+import Kontiki.Raft.Classes.Config (Config)
 import qualified Kontiki.Raft.Classes.Config as Config
 import Kontiki.Raft.Classes.RPC (MonadRPC)
 import qualified Kontiki.Raft.Classes.RPC as RPC
@@ -167,11 +168,12 @@ onAppendEntriesResponse resp = do
         (L.onAppendEntriesResponse resp)
 
 onElectionTimeout :: ( MonadState (S.SomeState v vl) m
-                     , MonadConfig m
+                     , MonadReader config m
                      , MonadRPC m
                      , MonadTimers m
                      , MonadPersistentState m
                      , VolatileState v
+                     , Config config
                      , Term term
                      , Index index
                      , Default v
@@ -182,7 +184,7 @@ onElectionTimeout :: ( MonadState (S.SomeState v vl) m
                      , RVReq.Index (RPC.RequestVoteRequest m) ~ index
                      , P.Index m ~ index
                      , RVReq.Node (RPC.RequestVoteRequest m) ~ node
-                     , Config.Node m ~ node
+                     , Config.Node config ~ node
                      , HasCallStack
                      )
                   => m ()

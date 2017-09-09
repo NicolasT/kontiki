@@ -14,9 +14,11 @@ module Kontiki.Raft.Classes.Lens (
       Lens'
     , view
     , set
+    , Getter
     ) where
 
 import Control.Applicative (Const(Const, getConst))
+import Data.Functor.Contravariant (Contravariant)
 import Data.Functor.Identity (Identity(Identity, runIdentity))
 
 -- | The standard 'Lens' definition
@@ -30,3 +32,6 @@ view l s = getConst (l Const s)
 
 set :: Lens' s a -> a -> s -> s
 set l a = runIdentity . l (\_ -> Identity a)
+
+-- | A 'Getter' is like a read-only 'Lens'.
+type Getter s a = forall f. (Contravariant f, Functor f) => (a -> f a) -> s -> f s

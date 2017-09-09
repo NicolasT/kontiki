@@ -40,8 +40,9 @@ import Control.Lens ((&), (.~), (^.))
 import Data.Default.Class (Default(def))
 
 import Control.Monad.Logger (MonadLogger, logDebug)
+import Control.Monad.Reader.Class (MonadReader)
 
-import Kontiki.Raft.Classes.Config (MonadConfig)
+import Kontiki.Raft.Classes.Config (Config)
 import qualified Kontiki.Raft.Classes.Config as Config
 import Kontiki.Raft.Classes.RPC (HasTerm(term), MonadRPC)
 import qualified Kontiki.Raft.Classes.RPC as RPC
@@ -118,7 +119,7 @@ onRequestVoteRequest req = do
     imodify SomeState
     return resp
   where
-    isCandidateLogUpToDate _ = return True
+    isCandidateLogUpToDate _ = return True -- TODO
     m >>= n = Ix.ibind n m
     m >> n = m >>= \_ -> n
     return a = Ix.ireturn a
@@ -153,13 +154,14 @@ onAppendEntriesResponse _ =
     ($(logDebug) "Received AppendEntries response in Follower mode, ignoring" :: m (State vs vls 'Follower) (State vs vls 'Follower) ())
         >>> imodify SomeState
 
-onElectionTimeout :: forall m vs vls requestVoteRequest index term node.
+onElectionTimeout :: forall m vs vls requestVoteRequest index term node config.
                      ( IxMonadState m
                      , Monad (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , MonadConfig (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+                     , MonadReader config (m (State vs vls 'Candidate) (State vs vls 'Candidate))
                      , MonadRPC (m (State vs vls 'Candidate) (State vs vls 'Candidate))
                      , MonadTimers (m (State vs vls 'Candidate) (State vs vls 'Candidate))
                      , MonadPersistentState (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+                     , Config config
                      , VolatileState vs
                      , Default vs
                      , requestVoteRequest ~ RPC.RequestVoteRequest (m (State vs vls 'Candidate) (State vs vls 'Candidate))
@@ -169,7 +171,7 @@ onElectionTimeout :: forall m vs vls requestVoteRequest index term node.
                      , RPC.Term requestVoteRequest ~ term
                      , P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate)) ~ term
                      , RequestVoteRequest.Node requestVoteRequest ~ node
-                     , Config.Node (m (State vs vls 'Candidate) (State vs vls 'Candidate)) ~ node
+                     , Config.Node config ~ node
                      , T.Term term
                      , T.Index index
                      , Default requestVoteRequest

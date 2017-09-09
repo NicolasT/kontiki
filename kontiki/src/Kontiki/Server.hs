@@ -16,6 +16,7 @@ import Network.Socket (withSocketsDo)
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Class (get)
+import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State.Strict (evalStateT)
 
 import Control.Exception.Safe (bracket, catchAny, finally)
@@ -36,7 +37,7 @@ import Control.Concurrent.Suspend (msDelay, sDelay)
 
 import qualified Kontiki.Raft as K
 
-import Kontiki.Config (Config(Config, configNode), runConfigT)
+import Kontiki.Config (Config(Config, configNode))
 import Kontiki.Protocol.Types (Node(Node))
 import Kontiki.RPC (runRPCT)
 import qualified Kontiki.Server.EKG as EKG (forkServerWith)
@@ -51,10 +52,10 @@ data MainloopEvent m = Timeout (Timers.TimeoutHandler m -> m ())
 
 mainloop :: Config -> GRPC.Server -> Timers.Timers -> ServerT IO ()
 mainloop config server timers = DB.withDB "/tmp/kontiki-db" DB.defaultOptions $ \db ->
-                                                                  Timers.runTimersT timers
+                                                                  flip runReaderT config
+                                                                $ Timers.runTimersT timers
                                                                 $ runPersistentStateT db
                                                                 $ runRPCT
-                                                                $ runConfigT config
                                                                 $ evalStateT loop state0
   where
     loop = do
@@ -128,5 +129,5 @@ main = withSocketsDo $ bracket mkLogEnv closeScribes $ \logEnv -> do
   where
     mkLogEnv = do
         env <- initLogEnv "kontiki" "production"
-        scribe <- mkHandleScribe ColorIfTerminal stderr DebugS V2
+        scribe <- mkHandleScribe ColorIfTerminal stderr InfoS V2
         registerScribe "stderr" scribe defaultScribeSettings env

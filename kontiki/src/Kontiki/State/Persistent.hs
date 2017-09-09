@@ -1,9 +1,12 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Kontiki.State.Persistent (
       PersistentStateT
@@ -13,8 +16,9 @@ module Kontiki.State.Persistent (
 import GHC.Generics (Generic)
 
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
+import Control.Monad.Reader.Class (MonadReader(ask, local))
+import Control.Monad.Trans.Class (MonadTrans, lift)
+import Control.Monad.Trans.Reader (ReaderT, mapReaderT, runReaderT)
 
 import Control.Monad.Logger (MonadLogger)
 import Katip (Katip, KatipContext)
@@ -33,7 +37,6 @@ import qualified Proto3.Suite.Class as Proto3
 import Control.Monad.Metrics (MonadMetrics)
 import qualified Control.Monad.Metrics as Metrics
 
-import qualified Kontiki.Raft.Classes.Config as C
 import Kontiki.Raft.Classes.RPC (MonadRPC)
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.State.Persistent
@@ -53,6 +56,9 @@ newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: ReaderT 
 
 runPersistentStateT :: L.DB -> PersistentStateT m a -> m a
 runPersistentStateT db = flip runReaderT db . unPersistentStateT
+
+mapPersistentStateT :: (m a -> n b) -> PersistentStateT m a -> PersistentStateT n b
+mapPersistentStateT f = PersistentStateT . mapReaderT f . unPersistentStateT
 
 currentTermKey, votedForKey :: BS8.ByteString
 currentTermKey = BS8.pack "currentTerm"
@@ -79,8 +85,9 @@ instance (Monad m, MonadRPC m) => MonadRPC (PersistentStateT m) where
     type RequestVoteRequest (PersistentStateT m) = RPC.RequestVoteRequest m
     type AppendEntriesRequest (PersistentStateT m) = RPC.AppendEntriesRequest m
 
-instance (Monad m, C.MonadConfig m) => C.MonadConfig (PersistentStateT m) where
-    type Node (PersistentStateT m) = C.Node m
+instance MonadReader r m => MonadReader r (PersistentStateT m) where
+    ask = lift ask
+    local = mapPersistentStateT . local
 
 data MaybeNode = MaybeNode { maybeNodeIsNull :: !Bool
                            , maybeNodeNode :: {-# UNPACK #-} !T.Node

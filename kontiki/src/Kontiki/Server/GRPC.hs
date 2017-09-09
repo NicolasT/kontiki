@@ -22,15 +22,21 @@ import Data.Monoid ((<>))
 
 import Control.Monad.Catch (MonadCatch, MonadMask)
 
-import Control.Exception.Safe (Exception(displayException), SomeException, throwM, tryAny, withException)
+import Control.Exception.Safe (Exception(displayException), SomeException, tryAny, withException)
 
 import qualified Control.Monad.Metrics as Metrics
 
-import Network.GRPC.HighLevel.Generated (GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), ServiceOptions(logger), StatusCode(StatusOk), defaultServiceOptions)
+import Network.GRPC.HighLevel.Generated (
+    GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), ServiceOptions(logger),
+    StatusCode(StatusAborted, StatusOk), StatusDetails(StatusDetails), defaultServiceOptions)
 
 import Data.Aeson (ToJSON)
 
-import Katip (Severity(ErrorS, WarningS), katipAddContext, katipAddNamespace, logTM, ls, sl)
+import qualified Data.ByteString.Char8 as BS8
+
+import Data.Default (Default, def)
+
+import Katip (KatipContext, Severity(ErrorS, WarningS), katipAddContext, katipAddNamespace, logTM, ls, sl)
 
 import Kontiki.Server.Monad (ServerT, runInIO)
 import qualified Kontiki.Protocol.GRPC.Node as Server
@@ -43,14 +49,22 @@ data RequestHandler m = RequestHandler { onRequestVote :: T.RequestVoteRequest -
                                        , onAppendEntries :: T.AppendEntriesRequest -> m T.AppendEntriesResponse
                                        }
 
-readRequest :: (Monad m, MonadIO m, MonadCatch m) => Server -> STM (RequestHandler m -> m ())
+readRequest :: (Monad m, MonadIO m, MonadCatch m, KatipContext m) => Server -> STM (RequestHandler m -> m ())
 readRequest Server{..} = do
     req <- TQueue.readTQueue serverQueue
     return $ \RequestHandler{..} -> case req of
-        RequestVote req' mvar ->
-            tryAny (onRequestVote req') >>= liftIO . MVar.putMVar mvar
-        AppendEntries req' mvar ->
-            tryAny(onAppendEntries req') >>= liftIO . MVar.putMVar mvar
+        RequestVote req' mvar -> do
+            res <- tryAny (onRequestVote req')
+            liftIO $ MVar.putMVar mvar res
+            case res of
+                Left exc -> $(logTM) WarningS $ "Exception in RequestVote handler: " <> ls (displayException exc)
+                Right _ -> return ()
+        AppendEntries req' mvar -> do
+            res <- tryAny(onAppendEntries req')
+            liftIO $ MVar.putMVar mvar res
+            case res of
+                Left exc -> $(logTM) WarningS $ "Exception in AppendEntries handler: " <> ls (displayException exc)
+                Right _ -> return ()
 
 newtype Server = Server { serverQueue :: TQueue Request }
 
@@ -74,6 +88,7 @@ runServer server = katipAddNamespace "grpc" $ do
 handler :: ( MonadIO m
            , MonadMask m
            , ToJSON req
+           , Default resp
            )
         => Server
         -> (req -> MVar (Either SomeException resp) -> Request)
@@ -86,7 +101,7 @@ handler server wrapper (ServerNormalRequest _meta req) =
             atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
             res <- MVar.takeMVar resBox
             case res of
-                Left err -> throwM err
+                Left err -> return (ServerNormalResponse def mempty StatusAborted (StatusDetails $ BS8.pack $ displayException err))
                 Right res' -> return (ServerNormalResponse res' mempty StatusOk "")
   where
     handleException e = $(logTM) ErrorS $ "Exception: " <> ls (displayException (e :: SomeException))

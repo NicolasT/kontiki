@@ -1,6 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Kontiki.Timers (
       TimersT
@@ -12,11 +15,12 @@ module Kontiki.Timers (
     ) where
 
 import Control.Monad (void)
-import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
+import Control.Monad.Trans.Class (MonadTrans, lift)
+import Control.Monad.Trans.Reader (ReaderT, mapReaderT, runReaderT)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Reader.Class (MonadReader(ask, local))
 
 import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.TQueue (TQueue)
@@ -29,7 +33,6 @@ import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 
 import Katip (Katip, KatipContext)
 
-import qualified Kontiki.Raft.Classes.Config as C
 import Kontiki.Raft.Classes.RPC (MonadRPC)
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer, cancelElectionTimer, startHeartbeatTimer))
@@ -37,6 +40,13 @@ import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer, cancelElecti
 newtype TimersT m a = TimersT { unTimersT :: ReaderT Timers m a }
     deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadLogger, Katip, KatipContext,
               MonadCatch, MonadMask, MonadThrow)
+
+instance MonadReader r m => MonadReader r (TimersT m) where
+    ask = lift ask
+    local = mapTimersT . local
+
+mapTimersT :: (m a -> n b) -> TimersT m a -> TimersT n b
+mapTimersT f = TimersT . mapReaderT f . unTimersT
 
 instance (Monad m, MonadIO m) => MonadTimers (TimersT m) where
     startElectionTimer = TimersT $ do
@@ -55,9 +65,6 @@ instance (Monad m, MonadRPC m) => MonadRPC (TimersT m) where
     type Node (TimersT m) = RPC.Node m
     type RequestVoteRequest (TimersT m) = RPC.RequestVoteRequest m
     type AppendEntriesRequest (TimersT m) = RPC.AppendEntriesRequest m
-
-instance (Monad m, C.MonadConfig m) => C.MonadConfig (TimersT m) where
-    type Node (TimersT m) = C.Node m
 
 data Timeout = ElectionTimeout
              | HeartbeatTimeout

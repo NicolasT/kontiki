@@ -1,5 +1,8 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Kontiki.RPC (
       RPCT
@@ -11,12 +14,11 @@ import Control.Monad.Trans.Identity (IdentityT, mapIdentityT, runIdentityT)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Reader.Class (MonadReader(ask, local))
 import Control.Monad.Trans.Class (MonadTrans, lift)
 
 import Katip (Katip(getLogEnv, localLogEnv), KatipContext(getKatipContext, localKatipContext, getKatipNamespace, localKatipNamespace))
 
-import Kontiki.Raft.Classes.Config (MonadConfig)
-import qualified Kontiki.Raft.Classes.Config as C
 import Kontiki.Raft.Classes.RPC (MonadRPC(Node, RequestVoteRequest, AppendEntriesRequest, broadcastRequestVoteRequest, sendAppendEntriesRequest))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import qualified Kontiki.Raft.Classes.Timers as T
@@ -45,6 +47,10 @@ instance KatipContext m => KatipContext (RPCT m) where
     getKatipNamespace = lift getKatipNamespace
     localKatipNamespace = mapRPCT . localKatipNamespace
 
+instance MonadReader r m => MonadReader r (RPCT m) where
+    ask = lift ask
+    local = mapRPCT . local
+
 instance (Monad m, P.MonadPersistentState m) => P.MonadPersistentState (RPCT m) where
     type Term (RPCT m) = P.Term m
     type Node (RPCT m) = P.Node m
@@ -52,8 +58,6 @@ instance (Monad m, P.MonadPersistentState m) => P.MonadPersistentState (RPCT m) 
     type Index (RPCT m) = P.Index m
 
 instance (Monad m, T.MonadTimers m) => T.MonadTimers (RPCT m)
-instance (Monad m, MonadConfig m) => MonadConfig (RPCT m) where
-    type Node (RPCT m) = C.Node m
 
 mapRPCT :: (m a -> n b) -> RPCT m a -> RPCT n b
 mapRPCT f (RPCT m) = RPCT $ mapIdentityT f m
