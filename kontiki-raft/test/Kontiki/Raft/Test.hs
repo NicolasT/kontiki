@@ -9,12 +9,18 @@ import Test.Tasty.Hspec (describe, it, testSpec)
 
 import Test.Hspec.Expectations (shouldBe)
 
+import Control.Exception (evaluate)
+import Data.Function ((&))
+import Control.Monad.Mock (WithResult((:->)), runMock)
+
 import Kontiki.Raft.Classes.State.Volatile (commitIndex, lastApplied)
 import Kontiki.Raft.Classes.Types (index0, term0)
 
 import Kontiki.Raft (SomeState, Role(Follower), initialState, initializePersistentState, role)
 import Kontiki.Raft.Internal.State (volatileState)
 
+import Kontiki.Raft.Mock (PersistentStateAction(SetCurrentTerm, SetVotedFor))
+import Kontiki.Raft.Orphans ()
 import qualified Kontiki.Raft.Types as T
 
 tests :: IO TestTree
@@ -39,3 +45,9 @@ tests = testSpec "Kontiki.Raft" $ do
         it "sets votedFor to Nothing" $ do
             ((), s) <- runNoLoggingT $ T.runPersistentStateT s0 initializePersistentState
             T.persistentStateVotedFor s `shouldBe` Nothing
+
+        it "unconditionally sets cururentTerm to term0 and votedFor to Nothing" $
+            evaluate $ runNoLoggingT initializePersistentState
+                & runMock [ SetCurrentTerm term0 :-> ()
+                          , SetVotedFor Nothing :-> ()
+                          ]
