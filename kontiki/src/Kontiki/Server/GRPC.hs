@@ -15,8 +15,8 @@ module Kontiki.Server.GRPC (
 import Control.Concurrent.MVar (MVar)
 import qualified Control.Concurrent.MVar as MVar
 import Control.Concurrent.STM (STM, atomically)
-import Control.Concurrent.STM.TQueue (TQueue)
-import qualified Control.Concurrent.STM.TQueue as TQueue
+import Control.Concurrent.STM.TBQueue (TBQueue)
+import qualified Control.Concurrent.STM.TBQueue as TBQueue
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid ((<>))
 
@@ -51,7 +51,7 @@ data RequestHandler m = RequestHandler { onRequestVote :: T.RequestVoteRequest -
 
 readRequest :: (Monad m, MonadIO m, MonadCatch m, KatipContext m) => Server -> STM (RequestHandler m -> m ())
 readRequest Server{..} = do
-    req <- TQueue.readTQueue serverQueue
+    req <- TBQueue.readTBQueue serverQueue
     return $ \RequestHandler{..} -> case req of
         RequestVote req' mvar -> do
             res <- tryAny (onRequestVote req')
@@ -66,10 +66,10 @@ readRequest Server{..} = do
                 Left exc -> $(logTM) WarningS $ "Exception in AppendEntries handler: " <> ls (displayException exc)
                 Right _ -> return ()
 
-newtype Server = Server { serverQueue :: TQueue Request }
+newtype Server = Server { serverQueue :: TBQueue Request }
 
 mkServer :: IO Server
-mkServer = Server <$> TQueue.newTQueueIO
+mkServer = Server <$> TBQueue.newTBQueueIO 1024
 
 runServer :: Server -> ServerT IO ()
 runServer server = katipAddNamespace "grpc" $ do
@@ -98,7 +98,7 @@ handler server wrapper (ServerNormalRequest _meta req) =
     katipAddContext (sl "request" req) $ Metrics.timed' Metrics.Milliseconds "kontiki.rpc" $
         flip withException handleException $ liftIO $ do
             resBox <- MVar.newEmptyMVar
-            atomically $ TQueue.writeTQueue (serverQueue server) (wrapper req resBox)
+            atomically $ TBQueue.writeTBQueue (serverQueue server) (wrapper req resBox)
             res <- MVar.takeMVar resBox
             case res of
                 Left err -> return (ServerNormalResponse def mempty StatusAborted (StatusDetails $ BS8.pack $ displayException err))

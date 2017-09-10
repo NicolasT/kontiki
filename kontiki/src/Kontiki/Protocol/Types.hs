@@ -29,6 +29,8 @@ import Control.Lens (lens)
 
 import Data.Default (Default(def))
 
+import Data.Hashable (Hashable(hashWithSalt))
+
 import Test.QuickCheck (Arbitrary(arbitrary, shrink))
 
 import Proto3.Suite.Class (Message, MessageField, Named)
@@ -83,7 +85,7 @@ instance ToJSON Index where
     toJSON = toJSON . getIndex
 
 newtype Node = Node { getNode :: Text }
-    deriving (Show, Eq, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 deriving instance MessageField Node
 instance Named Node
@@ -97,6 +99,9 @@ instance Arbitrary Node where
 
 instance ToJSON Node where
     toJSON = toJSON . getNode
+
+instance Hashable Node where
+    hashWithSalt s = hashWithSalt s . getNode
 
 
 newtype Entry = Entry { getEntry :: Word64 }

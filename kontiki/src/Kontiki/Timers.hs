@@ -23,8 +23,8 @@ import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Reader.Class (MonadReader(ask, local))
 
 import Control.Concurrent.STM (STM, atomically)
-import Control.Concurrent.STM.TQueue (TQueue)
-import qualified Control.Concurrent.STM.TQueue as TQueue
+import Control.Concurrent.STM.TBQueue (TBQueue)
+import qualified Control.Concurrent.STM.TBQueue as TBQueue
 
 import Control.Concurrent.Suspend (Delay)
 import Control.Concurrent.Timer (TimerIO, newTimer, oneShotStart, stopTimer)
@@ -52,14 +52,14 @@ instance (Monad m, MonadIO m) => MonadTimers (TimersT m) where
     startElectionTimer = TimersT $ do
         ts <- ask
         d <- liftIO $ timersMkElectionTimeout ts
-        void $ liftIO $ oneShotStart (timersElectionTimer ts) (atomically $ TQueue.writeTQueue (timersQueue ts) ElectionTimeout) d
+        void $ liftIO $ oneShotStart (timersElectionTimer ts) (atomically $ TBQueue.writeTBQueue (timersQueue ts) ElectionTimeout) d
     cancelElectionTimer = TimersT $ do
         ts <- ask
         liftIO $ stopTimer $ timersElectionTimer ts
     startHeartbeatTimer = TimersT $ do
         ts <- ask
         d <- liftIO $ timersMkHeartbeatTimeout ts
-        void $ liftIO $ oneShotStart (timersHeartbeatTimer ts) (atomically $ TQueue.writeTQueue (timersQueue ts) HeartbeatTimeout) d
+        void $ liftIO $ oneShotStart (timersHeartbeatTimer ts) (atomically $ TBQueue.writeTBQueue (timersQueue ts) HeartbeatTimeout) d
 
 instance (Monad m, MonadRPC m) => MonadRPC (TimersT m) where
     type Node (TimersT m) = RPC.Node m
@@ -76,12 +76,12 @@ data TimeoutHandler m = TimeoutHandler { onElectionTimeout :: m ()
 
 readTimeout :: Timers -> STM (TimeoutHandler m -> m ())
 readTimeout Timers{..} = do
-    t <- TQueue.readTQueue timersQueue
+    t <- TBQueue.readTBQueue timersQueue
     return $ \TimeoutHandler{..} -> case t of
         ElectionTimeout -> onElectionTimeout
         HeartbeatTimeout -> onHeartbeatTimeout
 
-data Timers = Timers { timersQueue :: TQueue Timeout
+data Timers = Timers { timersQueue :: TBQueue Timeout
                      , timersMkElectionTimeout :: IO Delay
                      , timersMkHeartbeatTimeout :: IO Delay
                      , timersElectionTimer :: TimerIO
@@ -90,7 +90,7 @@ data Timers = Timers { timersQueue :: TQueue Timeout
 
 newTimers :: IO Delay -> IO Delay -> IO Timers
 newTimers mkElectionTimeout mkHeartbeatTimeout =
-    Timers <$> TQueue.newTQueueIO
+    Timers <$> TBQueue.newTBQueueIO 1024
            <*> pure mkElectionTimeout
            <*> pure mkHeartbeatTimeout
            <*> newTimer

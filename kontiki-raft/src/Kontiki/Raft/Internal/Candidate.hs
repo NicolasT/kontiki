@@ -102,13 +102,15 @@ startElection :: forall m req config.
               => m ()
 startElection = do
     incrementCurrentTerm
-    -- voteForSelf
+    voteForSelf
     resetElectionTimer
     sendRequestVoteToOtherServers
   where
     incrementCurrentTerm = do
         currentTerm <- getCurrentTerm
         setCurrentTerm (succTerm currentTerm)
+    voteForSelf = do
+        voteFor =<< view localNode
     resetElectionTimer = do
         cancelElectionTimer
         startElectionTimer
@@ -123,6 +125,9 @@ startElection = do
     (>>) = (Prelude.>>)
     (>>=) = (Prelude.>>=)
     return a = Prelude.return a
+
+voteFor :: Monad m => node -> m ()
+voteFor _node = Prelude.return ()-- error "Not implemented"
 
 onRequestVoteRequest :: forall a m vs vls resp.
                         ( IxMonadState m

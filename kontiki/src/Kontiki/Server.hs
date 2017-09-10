@@ -55,7 +55,7 @@ mainloop config server timers = DB.withDB "/tmp/kontiki-db" DB.defaultOptions $ 
                                                                   flip runReaderT config
                                                                 $ Timers.runTimersT timers
                                                                 $ runPersistentStateT db
-                                                                $ runRPCT
+                                                                $ runRPCT undefined
                                                                 $ evalStateT loop state0
   where
     loop = do
