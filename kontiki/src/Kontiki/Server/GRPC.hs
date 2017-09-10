@@ -27,7 +27,8 @@ import Control.Exception.Safe (Exception(displayException), SomeException, tryAn
 import qualified Control.Monad.Metrics as Metrics
 
 import Network.GRPC.HighLevel.Generated (
-    GRPCMethodType(Normal), ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse), ServiceOptions(logger),
+    GRPCMethodType(Normal), Host, Port, ServerRequest(ServerNormalRequest), ServerResponse(ServerNormalResponse),
+    ServiceOptions(logger, serverHost, serverPort),
     StatusCode(StatusAborted, StatusOk), StatusDetails(StatusDetails), defaultServiceOptions)
 
 import Data.Aeson (ToJSON)
@@ -71,14 +72,17 @@ newtype Server = Server { serverQueue :: TBQueue Request }
 mkServer :: IO Server
 mkServer = Server <$> TBQueue.newTBQueueIO 1024
 
-runServer :: Server -> ServerT IO ()
-runServer server = katipAddNamespace "grpc" $ do
+runServer :: Host -> Port -> Server -> ServerT IO ()
+runServer host port server = katipAddNamespace "grpc" $ do
 
     logger' <- runInIO ($(logTM) WarningS . ls)
     nrv <- runInIO $ handler server RequestVote
     nae <- runInIO $ handler server AppendEntries
 
-    let opts = defaultServiceOptions { logger = logger' }
+    let opts = defaultServiceOptions { serverHost = host
+                                     , serverPort = port
+                                     , logger = logger'
+                                     }
         impl = Server.Node { Server.nodeRequestVote = nrv
                            , Server.nodeAppendEntries = nae
                            }

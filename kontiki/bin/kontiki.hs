@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified Kontiki.Server as S
+import qualified Kontiki.CLI as CLI
 
 main :: IO ()
-main = S.main
+main = CLI.main

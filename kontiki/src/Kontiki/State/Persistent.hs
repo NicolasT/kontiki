@@ -23,7 +23,13 @@ import Control.Monad.Trans.Reader (ReaderT, mapReaderT, runReaderT)
 import Control.Monad.Logger (MonadLogger)
 import Katip (Katip, KatipContext)
 
+import Control.Monad.Base (MonadBase)
 import Control.Monad.Catch (Exception, MonadCatch, MonadMask, MonadThrow, throwM)
+
+import Control.Monad.Trans.Control (
+    ComposeSt,
+    MonadBaseControl(StM, liftBaseWith, restoreM) , defaultLiftBaseWith, defaultRestoreM,
+    MonadTransControl(StT, liftWith, restoreT), defaultLiftWith, defaultRestoreT)
 
 import Data.Default (def)
 
@@ -51,8 +57,18 @@ import qualified Kontiki.Protocol.Types as T
 
 newtype PersistentStateT m a = PersistentStateT { unPersistentStateT :: ReaderT L.DB m a }
     deriving {- stock -} (Functor
-    {- deriving newtype ( -} , Applicative, Monad, MonadTrans, MonadIO, Katip, KatipContext
+    {- deriving newtype ( -} , Applicative, Monad, MonadTrans, MonadIO, Katip, KatipContext, MonadBase b
     {- deriving anyclass ( -} , MonadLogger, MonadTimers, MonadCatch, MonadMask, MonadThrow)
+
+instance MonadTransControl PersistentStateT where
+    type StT PersistentStateT a = StT (ReaderT L.DB) a
+    liftWith = defaultLiftWith PersistentStateT unPersistentStateT
+    restoreT = defaultRestoreT PersistentStateT
+
+instance MonadBaseControl b m => MonadBaseControl b (PersistentStateT m) where
+    type StM (PersistentStateT m) a = ComposeSt PersistentStateT m a
+    liftBaseWith = defaultLiftBaseWith
+    restoreM = defaultRestoreM
 
 runPersistentStateT :: L.DB -> PersistentStateT m a -> m a
 runPersistentStateT db = flip runReaderT db . unPersistentStateT

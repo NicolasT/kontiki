@@ -161,6 +161,7 @@ onElectionTimeout :: forall m vs vls requestVoteRequest index term node config.
                      , MonadRPC (m (State vs vls 'Candidate) (State vs vls 'Candidate))
                      , MonadTimers (m (State vs vls 'Candidate) (State vs vls 'Candidate))
                      , MonadPersistentState (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+                     , MonadLogger (m (State vs vls 'Candidate) (State vs vls 'Candidate))
                      , Config config
                      , VolatileState vs
                      , Default vs
@@ -175,6 +176,7 @@ onElectionTimeout :: forall m vs vls requestVoteRequest index term node config.
                      , T.Term term
                      , T.Index index
                      , Default requestVoteRequest
+                     , Show term
                      , HasCallStack
                      )
                   => m (State vs vls 'Follower) (SomeState vs vls) ()

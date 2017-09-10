@@ -1,0 +1,14 @@
+{ clusterId = "cluster1"
+, nodes = [
+    { name = "kontiki1"
+    , host = "127.0.0.1"
+    , port =  +50051
+    , database = "/tmp/kontiki/kontiki1"
+    }
+  , { name = "kontiki2"
+    , host = "127.0.0.1"
+    , port = +50052
+    , database = "/tmp/kontiki/kontiki2"
+    }
+  ]
+}

@@ -31,6 +31,12 @@ import Control.Concurrent.Timer (TimerIO, newTimer, oneShotStart, stopTimer)
 
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 
+import Control.Monad.Base (MonadBase)
+import Control.Monad.Trans.Control (
+    ComposeSt,
+    MonadBaseControl(StM, liftBaseWith, restoreM) , defaultLiftBaseWith, defaultRestoreM,
+    MonadTransControl(StT, liftWith, restoreT), defaultLiftWith, defaultRestoreT)
+
 import Katip (Katip, KatipContext)
 
 import Kontiki.Raft.Classes.RPC (MonadRPC)
@@ -39,7 +45,19 @@ import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer, cancelElecti
 
 newtype TimersT m a = TimersT { unTimersT :: ReaderT Timers m a }
     deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadLogger, Katip, KatipContext,
-              MonadCatch, MonadMask, MonadThrow)
+              MonadCatch, MonadMask, MonadThrow, MonadBase b)
+
+instance MonadTransControl TimersT where
+    type StT TimersT a = StT (ReaderT Timers) a
+    liftWith = defaultLiftWith TimersT unTimersT
+    restoreT = defaultRestoreT TimersT
+
+instance MonadBaseControl b m => MonadBaseControl b (TimersT m) where
+    type StM (TimersT m) a = ComposeSt TimersT m a
+    liftBaseWith = defaultLiftBaseWith
+    restoreM = defaultRestoreM
+
+
 
 instance MonadReader r m => MonadReader r (TimersT m) where
     ask = lift ask

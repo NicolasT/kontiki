@@ -30,8 +30,10 @@ import Data.Default.Class (Default(def))
 
 import Control.Monad.Indexed.State (IxStateT(runIxStateT))
 
-import Control.Monad.Logger (MonadLogger, logInfo)
+import Control.Monad.Logger (MonadLogger, logDebugSH, logInfo)
 import Control.Monad.Reader (MonadReader)
+
+import Data.Text (Text)
 
 import Kontiki.Raft.Classes.Config (Config)
 import qualified Kontiki.Raft.Classes.Config as Config
@@ -93,11 +95,13 @@ onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderSt
                         , Default resp
                         , Eq node
                         , MonadTimers m
+                        , Show req
                         , HasCallStack
                         )
                      => req
                      -> m resp
 onRequestVoteRequest req = do
+    $(logDebugSH) ("onRequestVoteRequest" :: Text, req)
     A.checkTerm req
     dispatchHandler
         (F.onRequestVoteRequest req)
@@ -114,11 +118,13 @@ onRequestVoteResponse :: ( RequestVoteResponse resp
                          , RPC.Term resp ~ term
                          , P.Term m ~ term
                          , Ord term
+                         , Show resp
                          , HasCallStack
                          )
                       => resp
                       -> m ()
 onRequestVoteResponse resp = do
+    $(logDebugSH) ("onRequestVoteResponse" :: Text, resp)
     A.checkTerm resp
     dispatchHandler
         (F.onRequestVoteResponse resp)
@@ -135,11 +141,16 @@ onAppendEntriesRequest :: ( AppendEntriesRequest req
                           , RPC.Term req ~ term
                           , P.Term m ~ term
                           , Ord term
+                          , Show req
+                          , RPC.Term resp ~ term
+                          , AppendEntriesResponse resp
+                          , Default resp
                           , HasCallStack
                           )
                        => req
                        -> m resp
 onAppendEntriesRequest req = do
+    $(logDebugSH) ("onAppendEntriesRequest" :: Text, req)
     A.checkTerm req
     dispatchHandler
         (F.onAppendEntriesRequest req)
@@ -156,11 +167,13 @@ onAppendEntriesResponse :: ( AppendEntriesResponse resp
                            , RPC.Term resp ~ term
                            , P.Term m ~ term
                            , Ord term
+                           , Show resp
                            , HasCallStack
                            )
                         => resp
                         -> m ()
 onAppendEntriesResponse resp = do
+    $(logDebugSH) ("onAppendEntriesResponse" :: Text, resp)
     A.checkTerm resp
     dispatchHandler
         (F.onAppendEntriesResponse resp)
@@ -172,6 +185,7 @@ onElectionTimeout :: ( MonadState (S.SomeState v vl) m
                      , MonadRPC m
                      , MonadTimers m
                      , MonadPersistentState m
+                     , MonadLogger m
                      , VolatileState v
                      , Config config
                      , Term term
@@ -185,6 +199,7 @@ onElectionTimeout :: ( MonadState (S.SomeState v vl) m
                      , P.Index m ~ index
                      , RVReq.Node (RPC.RequestVoteRequest m) ~ node
                      , Config.Node config ~ node
+                     , Show term
                      , HasCallStack
                      )
                   => m ()
