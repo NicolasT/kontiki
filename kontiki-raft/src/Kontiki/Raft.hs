@@ -3,14 +3,16 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+
 module Kontiki.Raft (
-      initialState
-    , S.SomeState
-    , S.Role(..)
-    , S.role
-    , S.volatileState
+      S.Some
+    , initialState
     , initializePersistentState
     , onRequestVoteRequest
     , onRequestVoteResponse
@@ -18,9 +20,13 @@ module Kontiki.Raft (
     , onAppendEntriesResponse
     , onElectionTimeout
     , onHeartbeatTimeout
+    , role
+    , Role(..)
     ) where
 
 import GHC.Stack (HasCallStack)
+
+import Control.Monad.Trans.State (StateT, runStateT)
 
 import Control.Monad.State.Class (MonadState(get, put))
 
@@ -28,7 +34,8 @@ import Control.Lens ((&), (.~))
 
 import Data.Default.Class (Default(def))
 
-import Control.Monad.Indexed.State (IxStateT(runIxStateT))
+import Control.Monad.Indexed ((>>>=), ireturn)
+import Control.Monad.Indexed.State (IxStateT(runIxStateT), iget, iput, imodify)
 
 import Control.Monad.Logger (MonadLogger, logDebugSH, logInfo)
 import Control.Monad.Reader (MonadReader)
@@ -46,7 +53,7 @@ import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
 import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(setCurrentTerm, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
-import Kontiki.Raft.Classes.State.Volatile (VolatileState(commitIndex, lastApplied))
+import Kontiki.Raft.Classes.State.Volatile (VolatileState, Role(Follower, Candidate, Leader))
 import qualified Kontiki.Raft.Classes.State.Volatile as V
 import Kontiki.Raft.Classes.Timers (MonadTimers)
 import Kontiki.Raft.Classes.Types (Index(index0), Term (term0))
@@ -57,19 +64,16 @@ import qualified Kontiki.Raft.Internal.Follower as F
 import qualified Kontiki.Raft.Internal.Leader as L
 import qualified Kontiki.Raft.Internal.State as S
 
-initialState :: ( Default volatileState
-                , VolatileState volatileState
+initialState :: ( VolatileState volatileState
                 , Index (V.Index volatileState)
                 )
-             => S.SomeState volatileState volatileLeaderState
-initialState = S.SomeState state
+             => S.Some volatileState
+initialState = S.Some (V.initialize initialCommitIndex initialLastApplied)
   where
-    state = S.F volatileState
-    volatileState = (def & commitIndex .~ index0
-                         & lastApplied .~ index0)
+    initialCommitIndex = index0
+    initialLastApplied = index0
 
-initializePersistentState :: ( Monad m
-                             , MonadPersistentState m
+initializePersistentState :: ( MonadPersistentState m
                              , MonadLogger m
                              , Term (P.Term m)
                              )
@@ -79,60 +83,63 @@ initializePersistentState = do
     setCurrentTerm term0
     setVotedFor Nothing
 
-onRequestVoteRequest :: ( MonadState (S.SomeState volatileState volatileLeaderState) m
+onRequestVoteRequest :: forall m volatileState req resp node term.
+                        ( MonadState (S.Some volatileState) m
                         , MonadPersistentState m
-                        , RequestVoteRequest req
-                        , RVReq.Node req ~ node
-                        , P.Term m ~ term
-                        , RPC.Term req ~ term
-                        , RPC.Term resp ~ term
-                        , Ord term
-                        , VolatileState volatileState
-                        , Default volatileState
+                        , MonadTimers m
                         , MonadLogger m
-                        , P.Node m ~ node
+                        , VolatileState volatileState
+                        , RequestVoteRequest req
                         , RequestVoteResponse resp
                         , Default resp
+                        , P.Node m ~ node
+                        , RVReq.Node req ~ node
                         , Eq node
-                        , MonadTimers m
-                        , Show req
-                        , HasCallStack
+                        , P.Term m ~ term
+                        , RPC.Term resp ~ term
+                        , RPC.Term req ~ term
+                        , Ord term
                         )
                      => req
                      -> m resp
 onRequestVoteRequest req = do
-    $(logDebugSH) ("onRequestVoteRequest" :: Text, req)
-    A.checkTerm req
-    dispatchHandler
-        (F.onRequestVoteRequest req)
-        (C.onRequestVoteRequest req)
-        (L.onRequestVoteRequest req)
+    checkTerm req
+    dispatch (runIxStateT (wrap $ F.onRequestVoteRequest req))
+             (runIxStateT (wrap $ C.onRequestVoteRequest req))
+             (runIxStateT (L.onRequestVoteRequest req))
 
-onRequestVoteResponse :: ( RequestVoteResponse resp
-                         , MonadPersistentState m
-                         , MonadState (S.SomeState volatileState volatileLeaderState) m
+onRequestVoteResponse :: ( MonadState (S.Some volatileState) m
                          , MonadLogger m
+                         , MonadPersistentState m
                          , MonadTimers m
                          , VolatileState volatileState
-                         , Default volatileState
-                         , RPC.Term resp ~ term
-                         , P.Term m ~ term
-                         , Ord term
-                         , Show resp
+                         , RPC.Term resp ~ P.Term m
                          , Show node
-                         , HasCallStack
+                         , RequestVoteResponse resp
+                         , Show resp
+                         , Ord (P.Term m)
                          )
                       => node
                       -> resp
                       -> m ()
 onRequestVoteResponse sender resp = do
     $(logDebugSH) ("onRequestVoteResponse" :: Text, sender, resp)
-    A.checkTerm resp
-    dispatchHandler
-        (F.onRequestVoteResponse sender resp)
-        (C.onRequestVoteResponse sender resp)
-        (L.onRequestVoteResponse sender resp)
+    checkTerm resp
+    dispatch
+        (runIxStateT (wrap $ F.onRequestVoteResponse sender resp))
+        (runIxStateT $ C.onRequestVoteResponse sender resp)
+        (runIxStateT $ L.onRequestVoteResponse sender resp)
 
+
+-- TODO
+onAppendEntriesRequest, onAppendEntriesResponse, onElectionTimeout, onHeartbeatTimeout :: a
+onAppendEntriesRequest = undefined
+onAppendEntriesResponse = undefined
+onElectionTimeout = undefined
+onHeartbeatTimeout = undefined
+
+
+{-
 onAppendEntriesRequest :: ( AppendEntriesRequest req
                           , MonadPersistentState m
                           , MonadState (S.SomeState volatileState volatileLeaderState) m
@@ -232,3 +239,40 @@ dispatchHandler f c l = do
             S.L _ _ -> runIxStateT l s
     put s'
     return r
+
+-}
+
+role :: VolatileState volatileState => S.Some volatileState -> Role
+role s = case s of
+    S.Some s' -> V.dispatch (const Follower) (const Candidate) (const Leader) s'
+
+checkTerm :: ( MonadPersistentState m
+             , MonadTimers m
+             , MonadState (S.Some volatileState) m
+             , MonadLogger m
+             , RPC.Term msg ~ P.Term m
+             , Ord (P.Term m)
+             , RPC.HasTerm msg
+             , VolatileState volatileState
+             )
+          => msg
+          -> m ()
+checkTerm req = dispatch (runIxStateT $ A.checkTerm req)
+                         (runIxStateT $ A.checkTerm req)
+                         (runIxStateT $ A.checkTerm req)
+
+wrap :: Monad m => IxStateT m (volatileState r) (volatileState r) a -> IxStateT m (volatileState r) (S.Some volatileState) a
+wrap act = act >>>= \r -> S.wrap >>>= \() -> ireturn r
+
+dispatch :: ( MonadState (S.Some volatileState) m
+            , VolatileState volatileState
+            )
+         => (volatileState 'V.Follower -> m (a, S.Some volatileState))
+         -> (volatileState 'V.Candidate -> m (a, S.Some volatileState))
+         -> (volatileState 'V.Leader -> m (a, S.Some volatileState))
+         -> m a
+dispatch f c l = get >>= \case
+    S.Some s -> do
+        (r, s') <- V.dispatch f c l s
+        put s'
+        return r

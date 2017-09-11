@@ -1,5 +1,11 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Raft.Types (
@@ -29,6 +35,9 @@ import Control.Monad.Logger (MonadLogger)
 import Control.Lens (lens)
 
 import Data.Default (Default(def))
+
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 import Test.QuickCheck (Arbitrary(arbitrary, shrink))
 
@@ -71,7 +80,7 @@ instance Default Index
 
 
 newtype Node = Node { getNode :: Int }
-    deriving (Show, Eq, Typeable, Generic)
+    deriving (Show, Eq, Ord, Typeable, Generic)
 
 instance Arbitrary Node where
     arbitrary = Node <$> arbitrary
@@ -216,23 +225,77 @@ runPersistentStateT :: PersistentState -> PersistentStateT m a -> m (a, Persiste
 runPersistentStateT s a = runStateT (unPersistentStateT a) s
 
 
-data VolatileState = VolatileState { volatileStateCommitIndex :: Index
-                                   , volatileStateLastApplied :: Index
-                                   }
-    deriving (Show, Eq, Typeable, Generic)
+data VolatileState r where
+    Follower :: Index -> Index -> VolatileState 'V.Follower
+    Candidate :: Index -> Index -> Set Node -> VolatileState 'V.Candidate
+    Leader :: Index -> Index -> VolatileState 'V.Leader
+
+deriving instance Eq (VolatileState r)
+deriving instance Show (VolatileState r)
 
 instance V.VolatileState VolatileState where
     type Index VolatileState = Index
+    type Node VolatileState = Node
 
-    commitIndex = lens volatileStateCommitIndex (\r i -> r { volatileStateCommitIndex = i })
-    lastApplied = lens volatileStateLastApplied (\r i -> r { volatileStateLastApplied = i })
+    initialize a b = Follower a b
+    convert c s = case c of
+        V.FollowerToCandidate -> case s of
+            Follower a b -> Candidate a b Set.empty
+        V.CandidateToLeader -> case s of
+            Candidate a b _ -> Leader a b
+        V.AnyToFollower -> case s of
+            Follower a b -> Follower a b
+            Candidate a b _ -> Follower a b
+            Leader a b -> Follower a b
+    dispatch f c l s = case s of
+        Follower _ _ -> f s
+        Candidate _ _ _ -> c s
+        Leader _ _ -> l s
 
-instance Default VolatileState where
-    def = VolatileState (Index 0) (Index 0)
+instance V.VolatileFollowerState (VolatileState 'V.Follower)
+instance V.VolatileCandidateState (VolatileState 'V.Candidate)
+instance V.VolatileLeaderState (VolatileState 'V.Leader)
 
-instance Arbitrary VolatileState where
-    arbitrary = VolatileState <$> arbitrary
-                              <*> arbitrary
+instance V.HasCommitIndex (VolatileState r) Index where
+    commitIndex = lens
+        (\case
+            Follower a _ -> a
+            Candidate a _ _ -> a
+            Leader a _ -> a)
+        (\s i -> case s of
+            Follower _ a -> Follower i a
+            Candidate _ a b -> Candidate i a b
+            Leader _ a -> Leader i a)
+
+instance V.HasLastApplied (VolatileState r) Index where
+    lastApplied = lens
+        (\case
+            Follower _ a -> a
+            Candidate _ a _ -> a
+            Leader _ a -> a)
+        (\s i -> case s of
+            Follower a _ -> Follower a i
+            Candidate a _ b -> Candidate a i b
+            Leader a _ -> Leader a i)
+
+instance V.HasVotesGranted (VolatileState 'V.Candidate) (Set Node) where
+    votesGranted = lens
+        (\case
+            Candidate _ _ a -> a)
+        (\s i -> case s of
+            Candidate a b _ -> Candidate a b i)
+
+instance Default (VolatileState 'V.Candidate) where
+    def = Candidate def def def
+
+instance Arbitrary (VolatileState 'V.Follower) where
+    arbitrary = Follower <$> arbitrary <*> arbitrary
+
+instance Arbitrary (VolatileState 'V.Candidate) where
+    arbitrary = Candidate <$> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary (VolatileState 'V.Leader) where
+    arbitrary = Leader <$> arbitrary <*> arbitrary
 
 
 newtype TimersT m a = TimersT { unTimersT :: WriterT [TimerEvent] m a }

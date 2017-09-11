@@ -1,25 +1,20 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module Kontiki.Raft.Internal.Follower where
 
 import GHC.Stack (HasCallStack)
 
-import Control.Monad.State.Class (MonadState)
+import Control.Monad.Indexed.State (IxMonadState)
 
-import Data.Default.Class (Default)
-
-import Kontiki.Raft.Classes.State.Volatile (VolatileState)
+import Kontiki.Raft.Classes.State.Volatile (VolatileState, Role(Follower))
 import Kontiki.Raft.Classes.Timers (MonadTimers)
 
-import Kontiki.Raft.Internal.State (SomeState)
-
-convertToFollower :: ( Monad m
-                     , MonadState (SomeState volatileState volatileCandidateState volatileLeaderState) m
+convertToFollower :: ( IxMonadState m
+                     , MonadTimers (m (volatileState 'Follower) (volatileState 'Follower))
                      , VolatileState volatileState
-                     , Default volatileState
-                     , MonadTimers m
                      )
-                  => m ()
+                  => m (volatileState r) (volatileState 'Follower) ()
 
 onAppendEntriesRequest :: HasCallStack
                        => req

@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 module Kontiki.Raft.Test (tests) where
 
 import Control.Lens ((^.))
@@ -13,11 +15,10 @@ import Control.Exception (evaluate)
 import Data.Function ((&))
 import Control.Monad.Mock (WithResult((:->)), runMock)
 
-import Kontiki.Raft.Classes.State.Volatile (commitIndex, lastApplied)
+import Kontiki.Raft.Classes.State.Volatile (Role(Follower), commitIndex, lastApplied)
 import Kontiki.Raft.Classes.Types (index0, term0)
 
-import Kontiki.Raft (SomeState, Role(Follower), initialState, initializePersistentState, role)
-import Kontiki.Raft.Internal.State (volatileState)
+import Kontiki.Raft (Some, initialState, initializePersistentState, role)
 
 import Kontiki.Raft.Mock (PersistentStateAction(SetCurrentTerm, SetVotedFor))
 import Kontiki.Raft.Orphans ()
@@ -26,15 +27,14 @@ import qualified Kontiki.Raft.Types as T
 tests :: IO TestTree
 tests = testSpec "Kontiki.Raft" $ do
     describe "initialState" $ do
-        let s = initialState :: SomeState T.VolatileState ()
-            v = volatileState s
+        let s = initialState :: Some T.VolatileState
 
         it "is in Follower role" $
             role s `shouldBe` Follower
         it "sets commitIndex to index0" $
-            v ^. commitIndex `shouldBe` index0
+            s ^. commitIndex `shouldBe` index0
         it "sets lastApplied to index0" $
-            v ^. lastApplied `shouldBe` index0
+            s ^. lastApplied `shouldBe` index0
 
     describe "initializePersistentState" $ do
         let s0 = T.PersistentState (T.Term 123) (Just $ T.Node 1)

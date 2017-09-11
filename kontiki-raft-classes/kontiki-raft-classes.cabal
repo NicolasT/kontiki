@@ -58,4 +58,4 @@ Library
                  , Kontiki.Raft.Classes.Test.Utils
                  , Kontiki.Raft.Classes.Types.Test
   Hs-Source-Dirs:  src
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -Wredundant-constraints -g

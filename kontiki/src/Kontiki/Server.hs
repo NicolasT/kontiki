@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -94,7 +95,7 @@ mainloop grpc config server timers = do
                 RPCResponse fn -> fn rpcHandlers
 
         loop queue
-    state0 = K.initialState :: K.SomeState VolatileState ()
+    state0 = K.initialState :: K.Some VolatileState
     databasePath = Text.unpack $ CLI.database $ localNode config
     clients = HashMap.fromList $ map
         (\n -> (Node (Text.toStrict $ CLI.name n), ClientConfig (host' n) (Port $ fromIntegral $ CLI.port n) [] Nothing))

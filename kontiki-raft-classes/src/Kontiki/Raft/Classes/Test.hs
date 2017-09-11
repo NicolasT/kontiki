@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -43,8 +44,14 @@ tests :: forall index term requestVoteRequest requestVoteResponse appendEntriesR
          , PropLensConstraints appendEntriesRequest (AEReq.Entry appendEntriesRequest)
          , Typeable appendEntriesResponse, AppendEntriesResponse appendEntriesResponse
          , PropLensConstraints appendEntriesResponse (Term appendEntriesResponse)
-         , Typeable volatileState, VolatileState volatileState
-         , PropLensConstraints volatileState (V.Index volatileState)
+         , VolatileState volatileState
+         , Typeable (volatileState 'V.Follower)
+         , PropLensConstraints (volatileState 'V.Follower) (V.Index volatileState)
+         , Typeable (volatileState 'V.Candidate)
+         , PropLensConstraints (volatileState 'V.Candidate) (V.Index volatileState)
+         , PropLensConstraints (volatileState 'V.Candidate) (V.Node volatileState), Ord (V.Node volatileState)
+         , Typeable (volatileState 'V.Leader)
+         , PropLensConstraints (volatileState 'V.Leader) (V.Index volatileState)
          )
       => TestTree
 tests = testGroup "Kontiki.Raft.Classes" [

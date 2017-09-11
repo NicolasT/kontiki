@@ -40,6 +40,7 @@ Library
                  , monad-logger >= 0.3 && < 0.4
                  , mtl >= 2.2 && < 2.3
                  , text >= 1.2 && < 1.3
+                 , transformers >= 0.5 && < 0.6
                  , kontiki-raft-classes
   Exposed-Modules: Kontiki.Raft
                  , Kontiki.Raft.Internal.AllServers
@@ -49,7 +50,7 @@ Library
                  , Kontiki.Raft.Internal.State
   Other-Modules:   Kontiki.Raft.Internal.Orphans
   Hs-Source-Dirs:  src
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -g
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -Wredundant-constraints -g
 
 Test-Suite kontiki-raft-test
   Type:            exitcode-stdio-1.0
@@ -60,8 +61,10 @@ Test-Suite kontiki-raft-test
                  , Kontiki.Raft.Test
                  , Kontiki.Raft.Types
   Build-Depends:   base >= 4.9 && < 4.10
+                 , containers >= 0.5 && < 0.6
                  , data-default >= 0.7 && < 0.8
                  , hspec-expectations >= 0.8 && < 0.9
+                 , indexed-extras >= 0.2 && < 0.3
                  , lens >= 4.15 && < 4.16
                  , monad-logger >= 0.3 && < 0.4
                  , monad-mock >= 0.1 && < 0.2
@@ -73,4 +76,4 @@ Test-Suite kontiki-raft-test
                  , kontiki-raft
                  , kontiki-raft-classes
   Hs-Source-Dirs:  test
-  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N -g
+  Ghc-Options:     -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -g

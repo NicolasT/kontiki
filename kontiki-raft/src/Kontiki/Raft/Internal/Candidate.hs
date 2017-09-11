@@ -1,11 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-missing-import-lists #-}
 
@@ -19,11 +20,6 @@ module Kontiki.Raft.Internal.Candidate (
     , onHeartbeatTimeout
     ) where
 
-import Prelude hiding ((>>), (>>=), return)
-import qualified Prelude
-
-import Data.String (fromString)
-
 import GHC.Stack (HasCallStack)
 
 import qualified Control.Monad.Indexed as Ix
@@ -33,11 +29,9 @@ import Control.Lens ((&), (.~), (^.), (%=), view)
 
 import Data.Default.Class (Default, def)
 
-import Control.Monad.Logger (MonadLogger, logDebug, logDebugSH, logInfo)
+import Control.Monad.Logger (MonadLogger, logDebug, logInfo)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-
-import Data.Text (Text)
 
 import qualified Data.Set as Set
 
@@ -52,55 +46,54 @@ import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
 import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse, success)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState, getCurrentTerm, lastLogEntry, setCurrentTerm)
 import qualified Kontiki.Raft.Classes.State.Persistent as P
-import Kontiki.Raft.Classes.State.Volatile (VolatileState, commitIndex, lastApplied, votesGranted)
+import Kontiki.Raft.Classes.State.Volatile (VolatileState, votesGranted)
 import qualified Kontiki.Raft.Classes.State.Volatile as V
 import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startElectionTimer)
 import Kontiki.Raft.Classes.Types (succTerm)
 import qualified Kontiki.Raft.Classes.Types as T
 
 import {-# SOURCE #-} qualified  Kontiki.Raft.Internal.Follower as Follower
-import Kontiki.Raft.Internal.State (Role(Candidate, Follower), SomeState(SomeState), State(F, C))
+import Kontiki.Raft.Internal.State (Some, wrap)
 
-convertToCandidate :: forall m vs vcs vls requestVoteRequest index term node config.
+convertToCandidate :: forall m m' volatileState config index node req term.
                       ( IxMonadState m
-                      , Monad (m (State vs vcs vls 'Candidate) (State vs vcs vls 'Candidate))
-                      , MonadReader config (m (State vs vcs vls 'Candidate) (State vs vcs vls 'Candidate))
-                      , MonadRPC (m (State vs vcs vls 'Candidate) (State vs vcs vls 'Candidate))
-                      , MonadTimers (m (State vs vcs vls 'Candidate) (State vs vcs vls 'Candidate))
-                      , MonadPersistentState (m (State vs vcs vls 'Candidate) (State vs vcs vls 'Candidate))
-                      , MonadLogger (m (State vs vcs vls 'Candidate) (State vs vcs vls 'Candidate))
-                      , Config config
-                      , VolatileState vs
-                      , Default vs
-                      , requestVoteRequest ~ RPC.RequestVoteRequest (m (State vs vcs vls 'Candidate) (State vs vls 'Candidate))
-                      , RequestVoteRequest requestVoteRequest
-                      , RequestVoteRequest.Index requestVoteRequest ~ index
-                      , P.Index (m (State vs vls 'Candidate) (State vs vls 'Candidate)) ~ index
-                      , RPC.Term requestVoteRequest ~ term
-                      , P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate)) ~ term
-                      , RequestVoteRequest.Node requestVoteRequest ~ node
-                      , Config.Node config ~ node
+                      , MonadReader config m'
+                      , V.VolatileState volatileState
                       , T.Term term
                       , T.Index index
-                      , Default requestVoteRequest
-                      , HasCallStack
-                      , Show term
+                      , Config config
+                      , MonadState (volatileState 'V.Candidate) m'
+                      , MonadLogger m'
+                      , MonadPersistentState m'
+                      , MonadTimers m'
+                      , MonadRPC m'
+                      , RequestVoteRequest req
+                      , Default req
+                      , Ord node
+                      , m' ~ m (volatileState 'V.Candidate) (volatileState 'V.Candidate)
+                      , req ~ RPC.RequestVoteRequest m'
+                      , index ~ RequestVoteRequest.Index req
+                      , index ~ P.Index m'
+                      , term ~ RPC.Term req
+                      , term ~ P.Term m'
+                      , node ~ Config.Node config
+                      , node ~ RequestVoteRequest.Node req
+                      , node ~ V.Node volatileState
                       )
-                   => m (State vs vls 'Follower) (State vs vls 'Candidate) ()
+                   => m (volatileState 'V.Follower) (volatileState 'V.Candidate) ()
 convertToCandidate = changeState >>> startElection
   where
-    changeState :: m (State vs vls 'Follower) (State vs vls 'Candidate) ()
-    changeState = imodify $ \case
-        F s -> C $ def & commitIndex .~ s ^. commitIndex
-                       & lastApplied .~ s ^. lastApplied
+    changeState = imodify (V.convert V.FollowerToCandidate)
+    m >>> n = Ix.ibind (const n) m
 
-startElection :: forall m req config.
+startElection :: forall volatileState m req config.
                  ( Monad m
                  , MonadPersistentState m
                  , MonadTimers m
                  , MonadRPC m
                  , MonadReader config m
                  , MonadLogger m
+                 , MonadState (volatileState 'V.Candidate) m
                  , Config config
                  , T.Index (P.Index m)
                  , T.Term (P.Term m)
@@ -110,7 +103,9 @@ startElection :: forall m req config.
                  , RequestVoteRequest.Index req ~ P.Index m
                  , RPC.Term req ~ P.Term m
                  , Config.Node config ~ RequestVoteRequest.Node req
-                 , Show (P.Term m)
+                 , V.VolatileState volatileState
+                 , V.Node volatileState ~ RequestVoteRequest.Node req
+                 , Ord (V.Node volatileState)
                  )
               => m ()
 startElection = do
@@ -123,7 +118,6 @@ startElection = do
     incrementCurrentTerm = do
         currentTerm <- getCurrentTerm
         let newTerm = succTerm currentTerm
-        $(logDebugSH) ("New term" :: Text, newTerm)
         setCurrentTerm newTerm
     voteForSelf =
         voteFor =<< view localNode
@@ -140,139 +134,99 @@ startElection = do
                       & lastLogTerm .~ term'
         broadcastRequestVoteRequest req
 
-    (>>) = (Prelude.>>)
-    (>>=) = (Prelude.>>=)
-    return a = Prelude.return a
-
-voteFor :: ( Monad m
-           , MonadState (State vs vcs vls 'Candidate) m
-           , V.Node vcs ~ node
+voteFor :: ( MonadState (volatileState 'V.Candidate) m
+           , V.VolatileState volatileState
+           , Ord (V.Node volatileState)
            )
-        => node
+        => V.Node volatileState
         -> m ()
 voteFor node =
     votesGranted %= Set.insert node
-  where
-    return = Prelude.return
 
-onRequestVoteRequest :: forall m vs vls resp req.
-                        ( IxMonadState m
-                        , MonadLogger (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                        , MonadPersistentState (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+onRequestVoteRequest :: ( MonadLogger m
+                        , MonadPersistentState m
                         , Default resp
                         , RequestVoteResponse resp
-                        , RPC.Term resp ~ P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                        , HasCallStack
+                        , RPC.Term resp ~ P.Term m
                         )
                      => req
-                     -> m (State vs vls 'Candidate) (SomeState vs vls) resp
+                     -> m resp
 onRequestVoteRequest _ = do
-    $(logDebug) "Received RequestVote request in Candidate mode, ignoring" :: m (State vs vls 'Candidate) (State vs vls 'Candidate) ()
-    currentTerm <- getCurrentTerm :: m (State vs vls 'Candidate) (State vs vls 'Candidate) (RPC.Term resp)
+    $(logDebug) "Received RequestVote request in Candidate mode, ignoring"
+    currentTerm <- getCurrentTerm
     let msg = def & term .~ currentTerm
                   & voteGranted .~ False
-    imodify SomeState
     return msg
-  where
-    (>>) = (>>>)
-    (>>=) = flip Ix.ibind
-    return a = Ix.ireturn a
 
-onRequestVoteResponse :: ( IxMonadState m
-                         , HasCallStack
-                )
+onRequestVoteResponse :: ( HasCallStack
+                         )
                       => node
                       -> resp
-                      -> m (State vs vls 'Candidate) (SomeState vs vls) ()
+                      -> m ()
 onRequestVoteResponse _ _ = error "Not implemented"
 
-onAppendEntriesRequest :: forall m req term vs vls resp.
+onAppendEntriesRequest :: forall m m' volatileState req resp term.
                           ( IxMonadState m
-                          , MonadPersistentState (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                          , RPC.Term req ~ term
-                          , RPC.Term resp ~ term
-                          , P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate)) ~ term
                           , AppendEntriesRequest req
                           , AppendEntriesResponse resp
+                          , VolatileState volatileState
                           , Default resp
+                          , P.Term m' ~ term
+                          , RPC.Term req ~ term
+                          , RPC.Term resp ~ term
                           , Ord term
-                          , VolatileState vs
-                          , Default vs
-                          , MonadState (SomeState vs vls) (m (SomeState vs vls) (SomeState vs vls))
-                          , MonadTimers (m (SomeState vs vls) (SomeState vs vls))
-                          , HasCallStack
+                          , m' ~ m (volatileState 'V.Candidate) (volatileState 'V.Candidate)
+                          , MonadPersistentState m'
+                          , MonadTimers (m (volatileState 'V.Follower) (volatileState 'V.Follower))
+                          , MonadState (volatileState 'V.Candidate) m'
                           )
                        => req
-                       -> m (State vs vls 'Candidate) (SomeState vs vls) resp
-onAppendEntriesRequest req = do
-    currentTerm <- getCurrentTerm :: m (State vs vls 'Candidate) (State vs vls 'Candidate) term
+                       -> m (volatileState 'V.Candidate) (Some volatileState) resp
+onAppendEntriesRequest req =
+    (getCurrentTerm :: m' term) >>>= \currentTerm ->
     if currentTerm <= req ^. term
-        then do
-            imodify SomeState :: m (State vs vls 'Candidate) (SomeState vs vls) ()
-            Follower.convertToFollower :: m (SomeState vs vls) (SomeState vs vls) ()
-            imodify (\(SomeState s) -> case s of
-                F s' -> F s'
-                _ -> error "Impossible") :: m (SomeState vs vls) (State vs vls 'Follower) ()
-            Follower.onAppendEntriesRequest req
-        else do
-            let msg = def & term .~ currentTerm
-                          & success .~ False
-            imodify SomeState
-            return msg
+        then
+            Follower.convertToFollower >>>= \() ->
+                Follower.onAppendEntriesRequest req >>>= \res ->
+                    wrap >>>= \() ->
+                        Ix.ireturn res
+        else
+            let res = def & term .~ currentTerm
+                          & success .~ False in
+            wrap >>>= \() ->
+                Ix.ireturn res
   where
-    (>>) = (>>>)
-    (>>=) = flip Ix.ibind
-    return a = Ix.ireturn a
-    ifThenElse b t f = case b of
-        True -> t
-        False -> f
+    a >>>= b = Ix.ibind b a
 
-
-onAppendEntriesResponse :: forall m vs vls node resp.
-                           ( IxMonadState m
-                           , MonadLogger (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                           , HasCallStack
-                           )
+onAppendEntriesResponse :: MonadLogger m
                         => node
                         -> resp
-                        -> m (State vs vls 'Candidate) (SomeState vs vls) ()
+                        -> m ()
 onAppendEntriesResponse _ _ =
-    ($(logDebug) "Received AppendEntries response in Candidate mode, ignoring" :: m (State vs vls 'Candidate) (State vs vls 'Candidate) ())
-        >>> imodify SomeState
+    $(logDebug) "Received AppendEntries response in Candidate mode, ignoring"
 
-onElectionTimeout :: forall m vs vls req config.
-                     ( IxMonadState m
-                     , Monad (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , MonadPersistentState (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , MonadTimers (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , MonadRPC (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , MonadReader config (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , MonadLogger (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+onElectionTimeout :: ( MonadPersistentState m
+                     , MonadTimers m
+                     , MonadRPC m
+                     , MonadReader config m
+                     , MonadLogger m
+                     , MonadState (volatileState 'V.Candidate) m
                      , Config config
-                     , T.Index (P.Index (m (State vs vls 'Candidate) (State vs vls 'Candidate)))
-                     , T.Term (P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate)))
-                     , req ~ RPC.RequestVoteRequest (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+                     , T.Index (P.Index m)
+                     , T.Term (P.Term m)
+                     , req ~ RPC.RequestVoteRequest m
                      , RequestVoteRequest req
                      , Default req
-                     , RequestVoteRequest.Index req ~ P.Index (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                     , RPC.Term req ~ P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate))
+                     , RequestVoteRequest.Index req ~ P.Index m
+                     , RPC.Term req ~ P.Term m
                      , Config.Node config ~ RequestVoteRequest.Node req
-                     , Show (P.Term (m (State vs vls 'Candidate) (State vs vls 'Candidate)))
+                     , V.VolatileState volatileState
+                     , V.Node volatileState ~ RequestVoteRequest.Node req
+                     , Ord (V.Node volatileState)
                      )
-                  => m (State vs vls 'Candidate) (SomeState vs vls) ()
-onElectionTimeout =
-    (startElection :: m (State vs vls 'Candidate) (State vs vls 'Candidate) ())
-        >>> imodify SomeState
+                  => m ()
+onElectionTimeout = startElection
 
-onHeartbeatTimeout :: forall m vs vls.
-                      ( IxMonadState m
-                      , MonadLogger (m (State vs vls 'Candidate) (State vs vls 'Candidate))
-                      , HasCallStack)
-                   => m (State vs vls 'Candidate) (SomeState vs vls) ()
+onHeartbeatTimeout :: MonadLogger m => m ()
 onHeartbeatTimeout =
-    ($(logDebug) "Heartbeat timeout in Candidate mode, ignoring" :: m (State vs vls 'Candidate) (State vs vls 'Candidate) ())
-        >>> imodify SomeState
-
-(>>>) :: Ix.IxMonad m => m i j a -> m j k b -> m i k b
-m >>> n = Ix.ibind (const n) m
-{-# INLINE (>>>) #-}
+    $(logDebug) "Heartbeat timeout in Candidate mode, ignoring"
