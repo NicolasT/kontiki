@@ -37,7 +37,7 @@ import Data.Default.Class (Default(def))
 import Control.Monad.Indexed ((>>>=), ireturn)
 import Control.Monad.Indexed.State (IxStateT(runIxStateT), iget, iput, imodify)
 
-import Control.Monad.Logger (MonadLogger, logDebugSH, logInfo)
+import Control.Monad.Logger (MonadLogger, logDebug, logDebugSH, logInfo)
 import Control.Monad.Reader (MonadReader)
 
 import Data.Text (Text)
@@ -99,10 +99,12 @@ onRequestVoteRequest :: forall m volatileState req resp node term.
                         , RPC.Term resp ~ term
                         , RPC.Term req ~ term
                         , Ord term
+                        , Show req
                         )
                      => req
                      -> m resp
 onRequestVoteRequest req = do
+    $(logDebugSH) ("onRequestVoteRequest" :: Text, req)
     checkTerm req
     dispatch (runIxStateT (wrap $ F.onRequestVoteRequest req))
              (runIxStateT (wrap $ C.onRequestVoteRequest req))
@@ -131,12 +133,50 @@ onRequestVoteResponse sender resp = do
         (runIxStateT $ L.onRequestVoteResponse sender resp)
 
 
+onElectionTimeout :: ( RVReq.Node (RPC.RequestVoteRequest m) ~ Config.Node config
+                     , MonadState (S.Some volatileState) m
+                     , MonadReader config m
+                     , V.Node volatileState ~ RVReq.Node (RPC.RequestVoteRequest m)
+                     , P.Term m ~ RPC.Term (RPC.RequestVoteRequest m)
+                     , P.Index m ~ RVReq.Index (RPC.RequestVoteRequest m)
+                     , MonadLogger m
+                     , VolatileState volatileState
+                     , Default (RPC.RequestVoteRequest m)
+                     , RequestVoteRequest (RPC.RequestVoteRequest m)
+                     , Ord (Config.Node config)
+                     , Term (RPC.Term (RPC.RequestVoteRequest m))
+                     , MonadRPC m
+                     , MonadTimers m
+                     , MonadPersistentState m
+                     , Config config
+                     , Index (RVReq.Index (RPC.RequestVoteRequest m))
+                     )
+                  => m ()
+onElectionTimeout = do
+    $(logDebug) "onElectionTimeout"
+    dispatch
+        (runIxStateT (F.onElectionTimeout >>>= \() -> S.wrap))
+        (runIxStateT (wrap $ C.onElectionTimeout))
+        (runIxStateT L.onElectionTimeout)
+
+onHeartbeatTimeout :: ( MonadLogger m
+                      , VolatileState volatileState
+                      , MonadState (S.Some volatileState) m
+                      )
+                   => m ()
+onHeartbeatTimeout = do
+    $(logDebug) "onHeartbeatTimeout"
+    dispatch
+        (runIxStateT (wrap F.onHeartbeatTimeout))
+        (runIxStateT (wrap C.onHeartbeatTimeout))
+        (runIxStateT L.onHeartbeatTimeout)
+
+
+
 -- TODO
-onAppendEntriesRequest, onAppendEntriesResponse, onElectionTimeout, onHeartbeatTimeout :: a
+onAppendEntriesRequest, onAppendEntriesResponse :: a
 onAppendEntriesRequest = undefined
 onAppendEntriesResponse = undefined
-onElectionTimeout = undefined
-onHeartbeatTimeout = undefined
 
 
 {-
