@@ -63,44 +63,44 @@ import qualified Kontiki.Protocol.Types as KPT
 
 type Clients = HashMap KPT.Node (Node.Node GRPC.ClientRequest GRPC.ClientResult)
 
-newtype RPCT m a = RPCT { unRPCT :: ReaderT (Clients, TBQueue Response) m a }
+newtype RPCT m a = RPCT { unRPCT :: ReaderT (Clients, TBQueue (KPT.Node, Response)) m a }
     deriving (Functor, Applicative, Monad, MonadIO, MonadBase b, MonadTrans, MonadCatch, MonadMask, MonadThrow, MonadLogger)
 
 data Response = RequestVote {-# UNPACK #-} !KPT.RequestVoteResponse
               | AppendEntries {-# UNPACK #-} !KPT.AppendEntriesResponse
 
-data ResponseHandler m = ResponseHandler { onRequestVote :: KPT.RequestVoteResponse -> m ()
-                                         , onAppendEntries :: KPT.AppendEntriesResponse -> m ()
+data ResponseHandler m = ResponseHandler { onRequestVote :: KPT.Node -> KPT.RequestVoteResponse -> m ()
+                                         , onAppendEntries :: KPT.Node -> KPT.AppendEntriesResponse -> m ()
                                          }
 
-readResponse :: (Monad m, MonadIO m, MonadCatch m, KatipContext m) => TBQueue Response -> STM (ResponseHandler m -> m ())
+readResponse :: (Monad m, MonadIO m, MonadCatch m, KatipContext m) => TBQueue (KPT.Node, Response) -> STM (ResponseHandler m -> m ())
 readResponse queue = do
-    resp <- TBQueue.readTBQueue queue
+    (node, resp) <- TBQueue.readTBQueue queue
     return $ \ResponseHandler{..} -> case resp of
         RequestVote resp' -> do
-            res <- tryAny (onRequestVote resp')
+            res <- tryAny (onRequestVote node resp')
             case res of
                 Left exc -> $(logTM) WarningS $ "Exception in RequestVote response handler: " <> ls (displayException exc)
                 Right _ -> return ()
         AppendEntries resp' -> do
-            res <- tryAny(onAppendEntries resp')
+            res <- tryAny(onAppendEntries node resp')
             case res of
                 Left exc -> $(logTM) WarningS $ "Exception in AppendEntries response handler: " <> ls (displayException exc)
                 Right _ -> return ()
 
-instance (Monad m, MonadIO m, KatipContext m, MonadBaseControl IO (ReaderT (Clients, TBQueue Response) m), Forall (Pure (ReaderT (Clients, TBQueue Response) m))) => MonadRPC (RPCT m) where
+instance (Monad m, MonadIO m, KatipContext m, MonadBaseControl IO (ReaderT (Clients, TBQueue (KPT.Node, Response)) m), Forall (Pure (ReaderT (Clients, TBQueue (KPT.Node, Response)) m))) => MonadRPC (RPCT m) where
     type Node (RPCT m) = KPT.Node
     type RequestVoteRequest (RPCT m) = KPT.RequestVoteRequest
     type AppendEntriesRequest (RPCT m) = KPT.AppendEntriesRequest
 
     broadcastRequestVoteRequest req = RPCT $ do
         (clients, queue) <- ask
-        forM_ clients $ \client -> async $ do
+        forM_ (HashMap.toList clients) $ \(node, client) -> async $ do
             $(logTM) DebugS $ "Sending request: " <> showLS req
             liftIO (Node.nodeRequestVote client (GRPC.ClientNormalRequest req 1 mempty)) >>= \case
                 GRPC.ClientNormalResponse resp _ _ GRPC.StatusOk _ -> do
                     $(logTM) DebugS $ "Response: " <> showLS resp
-                    liftIO $ atomically $ TBQueue.writeTBQueue queue (RequestVote resp)
+                    liftIO $ atomically $ TBQueue.writeTBQueue queue (node, RequestVote resp)
                 GRPC.ClientNormalResponse _ _ _ status _ -> do
                     $(logTM) ErrorS $ "Response status: " <> showLS status
                 GRPC.ClientError e -> do
@@ -113,7 +113,7 @@ instance (Monad m, MonadIO m, KatipContext m, MonadBaseControl IO (ReaderT (Clie
                 liftIO (Node.nodeAppendEntries client' (GRPC.ClientNormalRequest req 5 mempty)) >>= \case
                     GRPC.ClientNormalResponse resp _ _ GRPC.StatusOk _ -> do
                         $(logTM) DebugS $ "Response: " <> showLS resp
-                        liftIO $ atomically $ TBQueue.writeTBQueue queue (AppendEntries resp)
+                        liftIO $ atomically $ TBQueue.writeTBQueue queue (n, AppendEntries resp)
                     GRPC.ClientNormalResponse _ _ _ status _ -> do
                         $(logTM) ErrorS $ "Response status: " <> showLS status
                     GRPC.ClientError e -> do
@@ -156,7 +156,7 @@ instance (Monad m, T.MonadTimers m) => T.MonadTimers (RPCT m)
 mapRPCT :: (m a -> n b) -> RPCT m a -> RPCT n b
 mapRPCT f (RPCT m) = RPCT $ mapReaderT f m
 
-runRPCT :: Clients -> TBQueue Response -> RPCT m a -> m a
+runRPCT :: Clients -> TBQueue (KPT.Node, Response) -> RPCT m a -> m a
 runRPCT clients queue = flip runReaderT (clients, queue) . unRPCT
 
 

@@ -127,30 +127,32 @@ onRequestVoteRequest req = do
         True -> a
         False -> b
 
-onRequestVoteResponse :: forall a m vs vls.
+onRequestVoteResponse :: forall m vs vls node resp.
                          ( IxMonadState m
                          , MonadLogger (m (State vs vls 'Follower) (State vs vls 'Follower))
                          , HasCallStack
                          )
-                      => a
+                      => node
+                      -> resp
                       -> m (State vs vls 'Follower) (SomeState vs vls) ()
-onRequestVoteResponse _ =
+onRequestVoteResponse _ _ =
     ($(logDebug) "Received RequestVote response in Follower mode, ignoring" :: m (State vs vls 'Follower) (State vs vls 'Follower) ())
         >>> imodify SomeState
 
 onAppendEntriesRequest :: HasCallStack
-                       => a
-                       -> b
+                       => req
+                       -> m resp
 onAppendEntriesRequest _ = error "Not implemented"
 
-onAppendEntriesResponse :: forall a m vs vls.
+onAppendEntriesResponse :: forall m vs vls node resp.
                            ( IxMonadState m
                            , MonadLogger (m (State vs vls 'Follower) (State vs vls 'Follower))
                            , HasCallStack
                            )
-                        => a
+                        => node
+                        -> resp
                         -> m (State vs vls 'Follower) (SomeState vs vls) ()
-onAppendEntriesResponse _ =
+onAppendEntriesResponse _ _ =
     ($(logDebug) "Received AppendEntries response in Follower mode, ignoring" :: m (State vs vls 'Follower) (State vs vls 'Follower) ())
         >>> imodify SomeState
 

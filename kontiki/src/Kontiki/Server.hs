@@ -124,12 +124,12 @@ mainloop grpc config server timers = do
     rpcHandlers = RPC.ResponseHandler { RPC.onRequestVote = onRequestVoteResponse
                                       , RPC.onAppendEntries = onAppendEntriesResponse
                                       }
-    onRequestVoteResponse resp = katipAddContext (sl "requestVote" resp) $ do
+    onRequestVoteResponse sender resp = katipAddContext (sl "requestVote" resp) $ do
         $(logTM) DebugS "Handling RequestVote response"
-        K.onRequestVoteResponse resp
-    onAppendEntriesResponse resp = katipAddContext (sl "appendEntries" resp) $ do
+        K.onRequestVoteResponse sender resp
+    onAppendEntriesResponse sender resp = katipAddContext (sl "appendEntries" resp) $ do
         $(logTM) DebugS "Handling AppendEntries response"
-        K.onAppendEntriesResponse resp
+        K.onAppendEntriesResponse sender resp
 
 
 main' :: GRPC -> Config -> EKG.Store -> ServerT IO a

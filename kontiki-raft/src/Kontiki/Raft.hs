@@ -119,17 +119,19 @@ onRequestVoteResponse :: ( RequestVoteResponse resp
                          , P.Term m ~ term
                          , Ord term
                          , Show resp
+                         , Show node
                          , HasCallStack
                          )
-                      => resp
+                      => node
+                      -> resp
                       -> m ()
-onRequestVoteResponse resp = do
-    $(logDebugSH) ("onRequestVoteResponse" :: Text, resp)
+onRequestVoteResponse sender resp = do
+    $(logDebugSH) ("onRequestVoteResponse" :: Text, sender, resp)
     A.checkTerm resp
     dispatchHandler
-        (F.onRequestVoteResponse resp)
-        (C.onRequestVoteResponse resp)
-        (L.onRequestVoteResponse resp)
+        (F.onRequestVoteResponse sender resp)
+        (C.onRequestVoteResponse sender resp)
+        (L.onRequestVoteResponse sender resp)
 
 onAppendEntriesRequest :: ( AppendEntriesRequest req
                           , MonadPersistentState m
@@ -168,17 +170,19 @@ onAppendEntriesResponse :: ( AppendEntriesResponse resp
                            , P.Term m ~ term
                            , Ord term
                            , Show resp
+                           , Show node
                            , HasCallStack
                            )
-                        => resp
+                        => node
+                        -> resp
                         -> m ()
-onAppendEntriesResponse resp = do
-    $(logDebugSH) ("onAppendEntriesResponse" :: Text, resp)
+onAppendEntriesResponse sender resp = do
+    $(logDebugSH) ("onAppendEntriesResponse" :: Text, sender, resp)
     A.checkTerm resp
     dispatchHandler
-        (F.onAppendEntriesResponse resp)
-        (C.onAppendEntriesResponse resp)
-        (L.onAppendEntriesResponse resp)
+        (F.onAppendEntriesResponse sender resp)
+        (C.onAppendEntriesResponse sender resp)
+        (L.onAppendEntriesResponse sender resp)
 
 onElectionTimeout :: ( MonadState (S.SomeState v vl) m
                      , MonadReader config m

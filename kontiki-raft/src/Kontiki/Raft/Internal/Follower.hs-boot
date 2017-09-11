@@ -14,7 +14,7 @@ import Kontiki.Raft.Classes.Timers (MonadTimers)
 import Kontiki.Raft.Internal.State (SomeState)
 
 convertToFollower :: ( Monad m
-                     , MonadState (SomeState volatileState volatileLeaderState) m
+                     , MonadState (SomeState volatileState volatileCandidateState volatileLeaderState) m
                      , VolatileState volatileState
                      , Default volatileState
                      , MonadTimers m
@@ -22,5 +22,5 @@ convertToFollower :: ( Monad m
                   => m ()
 
 onAppendEntriesRequest :: HasCallStack
-                       => a
-                       -> b
+                       => req
+                       -> m resp
