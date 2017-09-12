@@ -85,9 +85,14 @@ runServer host port server = katipAddNamespace "grpc" $ do
                                      }
         impl = Server.Node { Server.nodeRequestVote = nrv
                            , Server.nodeAppendEntries = nae
+                           , Server.nodePing = handlePing
                            }
 
     liftIO $ Server.nodeServer impl opts
+
+handlePing :: ServerRequest 'Normal Server.PingRequest Server.PingResponse -> IO (ServerResponse 'Normal Server.PingResponse)
+handlePing (ServerNormalRequest _meta Server.PingRequest) =
+    return (ServerNormalResponse (Server.PingResponse (T.Node "localhost")) mempty StatusOk mempty)
 
 handler :: ( MonadIO m
            , MonadMask m
