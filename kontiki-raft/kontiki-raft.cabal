@@ -47,6 +47,7 @@ Library
                  , Kontiki.Raft.Internal.Candidate
                  , Kontiki.Raft.Internal.Follower
                  , Kontiki.Raft.Internal.Leader
+                 , Kontiki.Raft.Internal.Prelude
                  , Kontiki.Raft.Internal.State
   Other-Modules:   Kontiki.Raft.Internal.Orphans
   Hs-Source-Dirs:  src

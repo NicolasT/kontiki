@@ -22,10 +22,11 @@ module Kontiki.Raft.Internal.Candidate (
 
 import GHC.Stack (HasCallStack)
 
+import Control.Monad.Indexed ((>>>=))
 import qualified Control.Monad.Indexed as Ix
 import Control.Monad.Indexed.State (IxMonadState, imodify)
 
-import Control.Lens ((&), (.~), (^.), (%=), view)
+import Control.Lens ((&), (.~), (^.), (%=), use, view)
 
 import Data.Default.Class (Default, def)
 
@@ -53,6 +54,7 @@ import Kontiki.Raft.Classes.Types (succTerm)
 import qualified Kontiki.Raft.Classes.Types as T
 
 import {-# SOURCE #-} qualified  Kontiki.Raft.Internal.Follower as Follower
+import Kontiki.Raft.Internal.Leader (convertToLeader)
 import Kontiki.Raft.Internal.State (Some, wrap)
 
 convertToCandidate :: forall m m' volatileState config index node req term.
@@ -134,14 +136,19 @@ startElection = do
                       & lastLogTerm .~ term'
         broadcastRequestVoteRequest req
 
-voteFor :: ( MonadState (volatileState 'V.Candidate) m
+voteFor :: forall m m' volatileState.
+           ( IxMonadState m
+           , m' ~ m (volatileState 'V.Candidate) (volatileState 'V.Candidate)
            , V.VolatileState volatileState
            , Ord (V.Node volatileState)
            )
         => V.Node volatileState
-        -> m ()
+        -> m (volatileState 'V.Candidate) (Some volatileState) ()
 voteFor node =
-    votesGranted %= Set.insert node
+    votesGranted %= Set.insert node >>>= \() -> use votesGranted >>>= \votes ->
+        if Set.size votes >= 2
+            then convertToLeader >>>= \() -> wrap
+            else wrap
 
 onRequestVoteRequest :: ( MonadLogger m
                         , MonadPersistentState m
@@ -158,12 +165,35 @@ onRequestVoteRequest _ = do
                   & voteGranted .~ False
     return msg
 
-onRequestVoteResponse :: ( HasCallStack
+onRequestVoteResponse :: forall m m' term node resp volatileState.
+                         ( IxMonadState m
+                         , m' ~ m (volatileState 'V.Candidate) (volatileState 'V.Candidate)
+                         , MonadPersistentState m'
+                         , MonadLogger m'
+                         , P.Term m' ~ term
+                         , RPC.Term resp ~ term
+                         , V.VolatileState volatileState
+                         , MonadState (volatileState 'V.Candidate) m'
+                         , V.Node volatileState ~ node
+                         , RequestVoteResponse resp
+                         , Eq term
+                         , Ord node
+                         , HasCallStack
                          )
                       => node
                       -> resp
-                      -> m ()
-onRequestVoteResponse _ _ = error "Not implemented"
+                      -> m (volatileState 'V.Candidate) (Some volatileState) ()
+onRequestVoteResponse sender msg =
+    (getCurrentTerm :: m' term) >>>= \currentTerm ->
+        if msg ^. term == currentTerm
+            then
+                if msg ^. voteGranted
+                    then
+                        (voteFor sender :: m' ()) >>>= \() -> wrap
+                    else
+                        ($(logDebug) "Received RequestVote response but vote not granted" :: m' ()) >>>= \() -> wrap
+            else
+                ($(logDebug) "Received RequestVote response for old term" :: m' ()) >>>= \() -> wrap
 
 onAppendEntriesRequest :: forall m m' volatileState req resp term.
                           ( IxMonadState m

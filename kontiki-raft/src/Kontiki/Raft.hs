@@ -115,6 +115,8 @@ onRequestVoteResponse :: ( MonadState (S.Some volatileState) m
                          , MonadPersistentState m
                          , MonadTimers m
                          , VolatileState volatileState
+                         , V.Node volatileState ~ node
+                         , Ord node
                          , RPC.Term resp ~ P.Term m
                          , Show node
                          , RequestVoteResponse resp

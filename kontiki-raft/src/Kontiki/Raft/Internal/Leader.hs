@@ -1,5 +1,11 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+
 module Kontiki.Raft.Internal.Leader (
-      onRequestVoteRequest
+      convertToLeader
+    , onRequestVoteRequest
     , onRequestVoteResponse
     , onAppendEntriesRequest
     , onAppendEntriesResponse
@@ -8,6 +14,25 @@ module Kontiki.Raft.Internal.Leader (
     ) where
 
 import GHC.Stack (HasCallStack)
+
+import qualified Control.Monad.Indexed as Ix
+import Control.Monad.Indexed.State (IxMonadState, imodify)
+
+import Kontiki.Raft.Classes.State.Volatile (
+    Conversion(CandidateToLeader), Role(Candidate, Leader), VolatileState, convert)
+import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startHeartbeatTimer)
+
+convertToLeader :: forall m m' volatileState.
+                   ( IxMonadState m
+                   , m' ~ m (volatileState 'Leader) (volatileState 'Leader)
+                   , VolatileState volatileState
+                   , MonadTimers m'
+                   )
+                => m (volatileState 'Candidate) (volatileState 'Leader) ()
+convertToLeader =
+    imodify (convert CandidateToLeader) >>> (cancelElectionTimer :: m' ()) >>> (startHeartbeatTimer :: m' ())
+  where
+    a >>> b = Ix.ibind (const b) a
 
 onRequestVoteRequest :: HasCallStack
                      => a
