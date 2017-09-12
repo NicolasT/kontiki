@@ -71,8 +71,7 @@ runInIO act = do
     (logEnv, logContext, logNamespace) <- (,,) <$> getLogEnv <*> getKatipContext <*> getKatipNamespace
     return $ runServerT metrics logEnv logContext logNamespace . act
 
-withAsync :: ( Monad m
-             , MonadIO m
+withAsync :: ( MonadIO m
              , MonadBaseControl IO m
              , MonadMask m
              , Forall (Pure (ServerT m))

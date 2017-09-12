@@ -132,7 +132,7 @@ instance Arbitrary FollowerState where
 
 data CandidateState = CandidateState { candidateStateCommitIndex :: {-# UNPACK #-} !Index
                                      , candidateStateLastApplied :: {-# UNPACK #-} !Index
-                                     , candidateStateVotesGranted :: {-# UNPACK #-} !(Set Node)
+                                     , candidateStateVotesGranted :: !(Set Node)
                                      }
     deriving (Eq, Show)
 
