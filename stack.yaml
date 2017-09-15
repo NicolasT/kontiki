@@ -37,6 +37,7 @@ extra-deps:
 - dhall-1.6.0
 - criterion-1.2.2.0
 - statistics-0.14.0.2
+- rebindable-0.1.2
 
 docker:
  enable: false
