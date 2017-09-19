@@ -3,6 +3,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
@@ -20,13 +22,17 @@ module Kontiki.Raft.Internal.Candidate (
     , onHeartbeatTimeout
     ) where
 
+import Prelude hiding ((>>), (>>=), return)
+import Control.Monad (when)
+import Data.String (fromString)
+
 import GHC.Stack (HasCallStack)
 
 import Control.Monad.Indexed ((>>>=))
 import qualified Control.Monad.Indexed as Ix
 import Control.Monad.Indexed.State (IxMonadState, imodify)
 
-import Control.Lens ((&), (.~), (^.), (%=), use, view)
+import Control.Lens ((&), (.~), (^.), (%=), (<%=), use, view)
 
 import Data.Default.Class (Default, def)
 
@@ -35,6 +41,8 @@ import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
 
 import qualified Data.Set as Set
+
+import qualified Language.Haskell.Rebindable as Use
 
 import Kontiki.Raft.Classes.Config (Config, localNode)
 import qualified Kontiki.Raft.Classes.Config as Config
@@ -56,6 +64,12 @@ import qualified Kontiki.Raft.Classes.Types as T
 import {-# SOURCE #-} qualified  Kontiki.Raft.Internal.Follower as Follower
 import Kontiki.Raft.Internal.Leader (convertToLeader)
 import Kontiki.Raft.Internal.State (Some, wrap)
+
+{-# ANN ifThenElse ("HLint: ignore" :: String) #-}
+ifThenElse :: Bool -> a -> a -> a
+ifThenElse b t f = case b of
+    True -> t
+    False -> f
 
 convertToCandidate :: forall m m' volatileState config index node req term.
                       ( IxMonadState m
@@ -83,11 +97,13 @@ convertToCandidate :: forall m m' volatileState config index node req term.
                       , node ~ V.Node volatileState
                       )
                    => m (volatileState 'V.Follower) (volatileState 'V.Candidate) ()
-convertToCandidate = changeState >>> startElection
+convertToCandidate = let Use.IxMonad{..} = def in do
+    changeState
+    startElection
   where
     changeState = imodify (V.convert V.FollowerToCandidate)
-    m >>> n = Ix.ibind (const n) m
 
+{-
 startElection :: forall volatileState m req config.
                  ( Monad m
                  , MonadPersistentState m
@@ -110,45 +126,56 @@ startElection :: forall volatileState m req config.
                  , Ord (V.Node volatileState)
                  )
               => m ()
-startElection = do
+        -}
+startElection :: ( IxMonadState m
+                 )
+              => m (volatileState 'V.Candidate) (Some volatileState) ()
+startElection = let Use.IxMonad{..} = def in do
     $(logInfo) "Starting election"
     incrementCurrentTerm
     voteForSelf
-    resetElectionTimer
-    sendRequestVoteToOtherServers
+    -- resetElectionTimer
+    -- sendRequestVoteToOtherServers
   where
-    incrementCurrentTerm = do
+    incrementCurrentTerm :: ( MonadState (volatileState 'V.Candidate) m
+                            , MonadPersistentState m
+                            )
+                         => m ()
+    incrementCurrentTerm = let Use.Monad{..} = def in do
         currentTerm <- getCurrentTerm
         let newTerm = succTerm currentTerm
         setCurrentTerm newTerm
-    voteForSelf =
-        voteFor =<< view localNode
-    resetElectionTimer = do
+    voteForSelf = let Use.IxMonad{..} = def in do
+        self <- view localNode
+        voteFor self
+    resetElectionTimer = let Use.Monad{..} = def in do
         cancelElectionTimer
         startElectionTimer
-    sendRequestVoteToOtherServers = do
+    sendRequestVoteToOtherServers = let Use.Monad{..} = def in do
         me <- view localNode
         currentTerm <- getCurrentTerm
         (idx, term') <- maybe (T.index0, T.term0) (\(i, t, _) -> (i, t)) <$> lastLogEntry
-        let req = def & term .~ currentTerm
-                      & candidateId .~ me
-                      & lastLogIndex .~ idx
-                      & lastLogTerm .~ term'
-        broadcastRequestVoteRequest req
+        broadcastRequestVoteRequest $ def & term .~ currentTerm
+                                          & candidateId .~ me
+                                          & lastLogIndex .~ idx
+                                          & lastLogTerm .~ term'
 
 voteFor :: forall m m' volatileState.
            ( IxMonadState m
            , m' ~ m (volatileState 'V.Candidate) (volatileState 'V.Candidate)
+           , MonadState (volatileState 'V.Candidate) m'
+           , MonadTimers (m (volatileState 'V.Leader) (volatileState 'V.Leader))
            , V.VolatileState volatileState
            , Ord (V.Node volatileState)
            )
         => V.Node volatileState
         -> m (volatileState 'V.Candidate) (Some volatileState) ()
-voteFor node =
-    votesGranted %= Set.insert node >>>= \() -> use votesGranted >>>= \votes ->
-        if Set.size votes >= 2
-            then convertToLeader >>>= \() -> wrap
-            else wrap
+voteFor node = let Use.IxMonad{..} = def in do
+    votes <- votesGranted <%= Set.insert node
+    -- TODO
+    if Set.size votes >= 2
+        then convertToLeader >> wrap
+        else wrap
 
 onRequestVoteRequest :: ( MonadLogger m
                         , MonadPersistentState m
@@ -158,18 +185,18 @@ onRequestVoteRequest :: ( MonadLogger m
                         )
                      => req
                      -> m resp
-onRequestVoteRequest _ = do
+onRequestVoteRequest _ = let Use.Monad{..} = def in do
     $(logDebug) "Received RequestVote request in Candidate mode, ignoring"
     currentTerm <- getCurrentTerm
-    let msg = def & term .~ currentTerm
-                  & voteGranted .~ False
-    return msg
+    return $ def & term .~ currentTerm
+                 & voteGranted .~ False
 
 onRequestVoteResponse :: forall m m' term node resp volatileState.
                          ( IxMonadState m
                          , m' ~ m (volatileState 'V.Candidate) (volatileState 'V.Candidate)
                          , MonadPersistentState m'
                          , MonadLogger m'
+                         , MonadTimers (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                          , P.Term m' ~ term
                          , RPC.Term resp ~ term
                          , V.VolatileState volatileState
@@ -183,17 +210,19 @@ onRequestVoteResponse :: forall m m' term node resp volatileState.
                       => node
                       -> resp
                       -> m (volatileState 'V.Candidate) (Some volatileState) ()
-onRequestVoteResponse sender msg =
-    (getCurrentTerm :: m' term) >>>= \currentTerm ->
-        if msg ^. term == currentTerm
-            then
-                if msg ^. voteGranted
-                    then
-                        (voteFor sender :: m' ()) >>>= \() -> wrap
-                    else
-                        ($(logDebug) "Received RequestVote response but vote not granted" :: m' ()) >>>= \() -> wrap
-            else
-                ($(logDebug) "Received RequestVote response for old term" :: m' ()) >>>= \() -> wrap
+onRequestVoteResponse sender msg = let Use.IxMonad{..} = def in do
+    currentTerm <- getCurrentTerm :: m' term
+    if msg ^. term == currentTerm
+        then
+            if msg ^. voteGranted
+                then
+                    voteFor sender
+                else do
+                    $(logDebug) "Received RequestVote response but vote not granted" :: m' ()
+                    wrap
+        else do
+            $(logDebug) "Received RequestVote response for old term" :: m' ()
+            wrap
 
 onAppendEntriesRequest :: forall m m' volatileState req resp term.
                           ( IxMonadState m
@@ -212,21 +241,19 @@ onAppendEntriesRequest :: forall m m' volatileState req resp term.
                           )
                        => req
                        -> m (volatileState 'V.Candidate) (Some volatileState) resp
-onAppendEntriesRequest req =
-    (getCurrentTerm :: m' term) >>>= \currentTerm ->
+onAppendEntriesRequest req = let Use.IxMonad{..} = def in do
+    currentTerm <- getCurrentTerm :: m' term
     if currentTerm <= req ^. term
-        then
-            Follower.convertToFollower >>>= \() ->
-                Follower.onAppendEntriesRequest req >>>= \res ->
-                    wrap >>>= \() ->
-                        Ix.ireturn res
-        else
+        then do
+            Follower.convertToFollower
+            res <- Follower.onAppendEntriesRequest req
+            wrap
+            return res
+        else do
             let res = def & term .~ currentTerm
-                          & success .~ False in
-            wrap >>>= \() ->
-                Ix.ireturn res
-  where
-    a >>>= b = Ix.ibind b a
+                          & success .~ False
+            wrap
+            return res
 
 onAppendEntriesResponse :: MonadLogger m
                         => node
