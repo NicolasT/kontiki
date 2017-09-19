@@ -1,6 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Kontiki.Raft.Internal.Leader (
@@ -13,26 +16,31 @@ module Kontiki.Raft.Internal.Leader (
     , onHeartbeatTimeout
     ) where
 
+import Prelude hiding ((>>), (>>=), return)
+
 import GHC.Stack (HasCallStack)
 
-import qualified Control.Monad.Indexed as Ix
+import Data.Default.Class (def)
+
 import Control.Monad.Indexed.State (IxMonadState, imodify)
+
+import qualified Language.Haskell.Rebindable.Do as Use
 
 import Kontiki.Raft.Classes.State.Volatile (
     Conversion(CandidateToLeader), Role(Candidate, Leader), VolatileState, convert)
 import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startHeartbeatTimer)
 
-convertToLeader :: forall m m' volatileState.
+convertToLeader :: forall m mL {- mL = 'm in Leader state' -} volatileState.
                    ( IxMonadState m
-                   , m' ~ m (volatileState 'Leader) (volatileState 'Leader)
+                   , mL ~ m (volatileState 'Leader) (volatileState 'Leader)
+                   , MonadTimers mL
                    , VolatileState volatileState
-                   , MonadTimers m'
                    )
                 => m (volatileState 'Candidate) (volatileState 'Leader) ()
-convertToLeader =
-    imodify (convert CandidateToLeader) >>> (cancelElectionTimer :: m' ()) >>> (startHeartbeatTimer :: m' ())
-  where
-    a >>> b = Ix.ibind (const b) a
+convertToLeader = let Use.IxMonad{..} = def in do
+    imodify (convert CandidateToLeader)
+    cancelElectionTimer @mL
+    startHeartbeatTimer @mL
 
 onRequestVoteRequest :: HasCallStack
                      => a
