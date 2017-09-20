@@ -8,8 +8,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
-
 module Kontiki.Raft (
       S.Some
     , initialState
@@ -24,18 +22,12 @@ module Kontiki.Raft (
     , Role(..)
     ) where
 
-import GHC.Stack (HasCallStack)
-
-import Control.Monad.Trans.State (StateT, runStateT)
-
 import Control.Monad.State.Class (MonadState(get, put))
 
-import Control.Lens ((&), (.~))
-
-import Data.Default.Class (Default(def))
+import Data.Default.Class (Default)
 
 import Control.Monad.Indexed ((>>>=), ireturn)
-import Control.Monad.Indexed.State (IxStateT(runIxStateT), iget, iput, imodify)
+import Control.Monad.Indexed.State (IxStateT(runIxStateT))
 
 import Control.Monad.Logger (MonadLogger, logDebug, logDebugSH, logInfo)
 import Control.Monad.Reader (MonadReader)
@@ -49,8 +41,8 @@ import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
-import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
-import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
+-- import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+-- import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(setCurrentTerm, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState, Role(Follower, Candidate, Leader))
@@ -157,8 +149,8 @@ onElectionTimeout :: ( RVReq.Node (RPC.RequestVoteRequest m) ~ Config.Node confi
 onElectionTimeout = do
     $(logDebug) "onElectionTimeout"
     dispatch
-        (runIxStateT (F.onElectionTimeout >>>= \() -> S.wrap))
-        (runIxStateT (wrap $ C.onElectionTimeout))
+        (runIxStateT F.onElectionTimeout)
+        (runIxStateT C.onElectionTimeout)
         (runIxStateT L.onElectionTimeout)
 
 onHeartbeatTimeout :: ( MonadLogger m

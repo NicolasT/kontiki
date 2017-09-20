@@ -53,6 +53,7 @@ import qualified Kontiki.Raft.Classes.Types as T
 
 import Kontiki.Raft.Internal.Candidate (convertToCandidate)
 import Kontiki.Raft.Internal.Orphans ()
+import Kontiki.Raft.Internal.State (Some)
 
 convertToFollower :: ( IxMonadState m
                      , MonadTimers (m (volatileState 'V.Follower) (volatileState 'V.Follower))
@@ -121,8 +122,6 @@ onAppendEntriesResponse _ _ =
 
 onElectionTimeout :: ( IxMonadState m
                      , MonadReader config m'
-                     , MonadState (volatileState 'V.Candidate) m'
-                     , MonadLogger m'
                      , MonadPersistentState m'
                      , MonadTimers m'
                      , MonadRPC m'
@@ -138,12 +137,14 @@ onElectionTimeout :: ( IxMonadState m
                      , T.Index index
                      , Config.Node config ~ node
                      , RequestVoteRequest.Node req ~ node
-                     , V.Node volatileState ~ node
-                     , Ord node
                      , RequestVoteRequest req
                      , Default req
+                     , V.Node volatileState ~ node
+                     , Ord node
+                     , MonadState (volatileState 'V.Candidate) (m (volatileState 'V.Candidate) (volatileState 'V.Candidate))
+                     , MonadTimers (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                      )
-                  => m (volatileState 'V.Follower) (volatileState 'V.Candidate) ()
+                  => m (volatileState 'V.Follower) (Some volatileState) ()
 onElectionTimeout = convertToCandidate
 
 onHeartbeatTimeout :: ( MonadLogger m

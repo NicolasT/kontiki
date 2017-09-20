@@ -6,6 +6,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# OPTIONS_GHC -fno-warn-missing-import-lists #-}
+
 module Kontiki.Raft.Internal.Leader (
       convertToLeader
     , onRequestVoteRequest
