@@ -41,7 +41,7 @@ convertToLeader :: forall m mL {- mL = 'm in Leader state' -} volatileState.
                 => m (volatileState 'Candidate) (volatileState 'Leader) ()
 convertToLeader = let Use.IxMonad{..} = def in do
     imodify (convert CandidateToLeader)
-    cancelElectionTimer @mL
+    cancelElectionTimer
     startHeartbeatTimer @mL
 
 onRequestVoteRequest :: HasCallStack

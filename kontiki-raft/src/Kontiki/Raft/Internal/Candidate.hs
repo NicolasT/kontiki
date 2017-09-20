@@ -6,6 +6,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-missing-import-lists #-}
@@ -24,7 +25,7 @@ import Data.String (fromString)
 
 import qualified Data.Set as Set
 
-import Control.Lens ((.~), (&), (.=), (<%=), view)
+import Control.Lens ((^.), (.~), (&), (.=), (<%=), view)
 
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
@@ -32,7 +33,7 @@ import Control.Monad.Indexed.State (IxMonadState, iget, imodify, iput)
 
 import Data.Default.Class (Default, def)
 
-import Control.Monad.Logger (MonadLogger, logInfo)
+import Control.Monad.Logger (MonadLogger, logDebug, logInfo)
 
 import qualified Language.Haskell.Rebindable.Do as Use
 
@@ -42,6 +43,7 @@ import Kontiki.Raft.Classes.RPC (MonadRPC, broadcastRequestVoteRequest, term)
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest, candidateId, lastLogIndex, lastLogTerm)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RequestVoteRequest
+import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse, voteGranted)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState, getCurrentTerm, setCurrentTerm, lastLogEntry)
 import qualified Kontiki.Raft.Classes.State.Persistent as Persistent
 import Kontiki.Raft.Classes.State.Volatile (Conversion(FollowerToCandidate), Role(Candidate, Follower, Leader), VolatileState, convert, dispatch, votesGranted)
@@ -160,10 +162,46 @@ voteFor node = let Use.IxMonad{..} = def in do
         then convertToLeader >> wrap
         else wrap
 
-onRequestVoteRequest :: a
-onRequestVoteRequest = undefined
-onRequestVoteResponse :: a
-onRequestVoteResponse = undefined
+onRequestVoteRequest :: ( MonadLogger m
+                        , MonadPersistentState m
+                        , RequestVoteResponse resp
+                        , Persistent.Term m ~ RPC.Term resp
+                        , Default resp
+                        )
+                     => req
+                     -> m resp
+onRequestVoteRequest _ = let Use.Monad{..} = def in do
+    $(logDebug) "Received RequestVote request in Candidate mode, rejecting"
+    term' <- getCurrentTerm
+    return $ def & term .~ term'
+                 & voteGranted .~ False
+
+onRequestVoteResponse :: forall m node resp term volatileState mCC.
+                         ( IxMonadState m
+                         , mCC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
+                         , MonadPersistentState mCC
+                         , MonadLogger mCC
+                         , MonadState (volatileState 'Candidate) mCC
+                         , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
+                         , VolatileState volatileState
+                         , Eq term
+                         , Ord node
+                         , Persistent.Term mCC ~ term
+                         , RPC.Term resp ~ term
+                         , Volatile.Node volatileState ~ node
+                         , RequestVoteResponse resp
+                         )
+                      => node
+                      -> resp
+                      -> m (volatileState 'Candidate) (Some volatileState) ()
+onRequestVoteResponse sender resp = let Use.IxMonad{..} = def in do
+    term' <- getCurrentTerm
+    if resp ^. term /= term'
+        then do
+            $(logDebug) "Received RequestVote response for other term, ignoring" :: mCC ()
+            wrap
+        else
+            voteFor sender
 
 onElectionTimeout :: forall m config index node requestVoteRequest term volatileState mCC mLL.
                      ( mCC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
