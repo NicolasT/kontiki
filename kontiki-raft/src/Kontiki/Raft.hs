@@ -4,8 +4,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Kontiki.Raft (
@@ -75,8 +73,7 @@ initializePersistentState = do
     setCurrentTerm term0
     setVotedFor Nothing
 
-onRequestVoteRequest :: -- forall m volatileState req resp node term.
-                        ( MonadState (S.Some volatileState) m
+onRequestVoteRequest :: ( MonadState (S.Some volatileState) m
                         , MonadPersistentState m
                         , MonadTimers m
                         , MonadLogger m
@@ -100,7 +97,7 @@ onRequestVoteRequest req = do
     checkTerm req
     dispatch (runIxStateT (wrap $ F.onRequestVoteRequest req))
              (runIxStateT (wrap $ C.onRequestVoteRequest req))
-             (runIxStateT (L.onRequestVoteRequest req))
+             (runIxStateT (wrap $ L.onRequestVoteRequest req))
 
 onRequestVoteResponse :: ( MonadState (S.Some volatileState) m
                          , MonadLogger m
@@ -124,7 +121,7 @@ onRequestVoteResponse sender resp = do
     dispatch
         (runIxStateT (wrap $ F.onRequestVoteResponse sender resp))
         (runIxStateT $ C.onRequestVoteResponse sender resp)
-        (runIxStateT $ L.onRequestVoteResponse sender resp)
+        (runIxStateT (wrap $ L.onRequestVoteResponse sender resp))
 
 
 onAppendEntriesRequest :: ( MonadState (S.Some volatileState) m
@@ -136,6 +133,9 @@ onAppendEntriesRequest :: ( MonadState (S.Some volatileState) m
                           , Show req
                           , AppendEntriesRequest req
                           , Ord (P.Term m)
+                          , RPC.Term resp ~ P.Term m
+                          , AppendEntriesResponse resp
+                          , Default resp
                           )
                        => req
                        -> m resp
@@ -143,8 +143,10 @@ onAppendEntriesRequest req = do
     $(logDebugSH) ("onAppendEntriesRequest" :: Text, req)
     checkTerm req
     dispatch (runIxStateT (F.onAppendEntriesRequest req))
-             (runIxStateT (C.onAppendEntriesRequest req))
-             (runIxStateT (L.onAppendEntriesRequest req))
+             (runIxStateT (C.onAppendEntriesRequest req >>>= \r -> S.wrap >>> ireturn r))
+             (runIxStateT (wrap $ L.onAppendEntriesRequest req))
+  where
+    a >>> b = a >>>= \() -> b
 
 onAppendEntriesResponse :: ( MonadState (S.Some volatileState) m
                            , MonadLogger m
@@ -164,7 +166,7 @@ onAppendEntriesResponse sender resp = do
     $(logDebugSH) ("onAppendEntriesResponse" :: Text, sender, resp)
     checkTerm resp
     dispatch (runIxStateT (wrap $ F.onAppendEntriesResponse sender resp))
-             (runIxStateT (C.onAppendEntriesResponse sender resp))
+             (runIxStateT (wrap $ C.onAppendEntriesResponse sender resp))
              (runIxStateT (L.onAppendEntriesResponse sender resp))
 
 
@@ -192,7 +194,7 @@ onElectionTimeout = do
     dispatch
         (runIxStateT F.onElectionTimeout)
         (runIxStateT C.onElectionTimeout)
-        (runIxStateT L.onElectionTimeout)
+        (runIxStateT (wrap L.onElectionTimeout))
 
 onHeartbeatTimeout :: ( MonadLogger m
                       , VolatileState volatileState

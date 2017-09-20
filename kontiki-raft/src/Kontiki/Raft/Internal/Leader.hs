@@ -1,9 +1,10 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-missing-import-lists #-}
@@ -19,15 +20,26 @@ module Kontiki.Raft.Internal.Leader (
     ) where
 
 import Prelude hiding ((>>), (>>=), return)
+import Data.String (fromString)
 
 import GHC.Stack (HasCallStack)
 
-import Data.Default.Class (def)
+import Control.Lens ((&), (.~))
+
+import Control.Monad.Logger (MonadLogger, logDebug)
+
+import Data.Default.Class (Default, def)
 
 import Control.Monad.Indexed.State (IxMonadState, imodify)
 
 import qualified Language.Haskell.Rebindable.Do as Use
 
+import Kontiki.Raft.Classes.RPC (term)
+import qualified Kontiki.Raft.Classes.RPC as RPC
+import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse, voteGranted)
+import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse, success)
+import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState, getCurrentTerm)
+import qualified Kontiki.Raft.Classes.State.Persistent as Persistent
 import Kontiki.Raft.Classes.State.Volatile (
     Conversion(CandidateToLeader), Role(Candidate, Leader), VolatileState, convert)
 import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startHeartbeatTimer)
@@ -43,35 +55,56 @@ convertToLeader :: forall m mL {- mL = 'm in Leader state' -} volatileState.
 convertToLeader = let Use.IxMonad{..} = def in do
     imodify (convert CandidateToLeader)
     cancelElectionTimer
-    startHeartbeatTimer @mL
+    startHeartbeatTimer :: mL ()
 
     sendInitialEmptyAppendEntriesRPCs
   where
     sendInitialEmptyAppendEntriesRPCs = let Use.Monad{..} = def in do
         error "Not implemented"
 
-onRequestVoteRequest :: HasCallStack
-                     => a
-                     -> b
-onRequestVoteRequest _ = error "Not implemented"
+onRequestVoteRequest :: ( MonadLogger m
+                        , MonadPersistentState m
+                        , RequestVoteResponse resp
+                        , Default resp
+                        , RPC.Term resp ~ Persistent.Term m
+                        )
+                     => req
+                     -> m resp
+onRequestVoteRequest _ = let Use.Monad{..} = def in do
+    $(logDebug) "Received RequestVote request in Leader mode, rejecting"
+    term' <- getCurrentTerm
+    return $ def & term .~ term'
+                 & voteGranted .~ False
 
-onRequestVoteResponse :: HasCallStack
-                      => a
-                      -> b
-onRequestVoteResponse _ = error "Not implemented"
+onRequestVoteResponse :: MonadLogger m
+                      => sender
+                      -> resp
+                      -> m ()
+onRequestVoteResponse _ _ =
+    $(logDebug) "Received RequestVote response in Leader mode, ignoring"
 
-onAppendEntriesRequest :: HasCallStack
-                       => a
-                       -> b
-onAppendEntriesRequest _ = error "Not implemented"
+onAppendEntriesRequest :: ( MonadLogger m
+                          , MonadPersistentState m
+                          , RPC.Term resp ~ Persistent.Term m
+                          , AppendEntriesResponse resp
+                          , Default resp
+                          )
+                       => req
+                       -> m resp
+onAppendEntriesRequest _ = let Use.Monad{..} = def in do
+    $(logDebug) "Received AppendEntries request in Leader mode, rejecting"
+    term' <- getCurrentTerm
+    return $ def & term .~ term'
+                 & success .~ False
 
 onAppendEntriesResponse :: HasCallStack
                         => a
                         -> b
 onAppendEntriesResponse _ = error "Not implemented"
 
-onElectionTimeout :: HasCallStack => a
-onElectionTimeout = error "Not implemented"
+onElectionTimeout :: MonadLogger m => m ()
+onElectionTimeout =
+    $(logDebug) "Received election timeout in Leader mode, ignoring"
 
 onHeartbeatTimeout :: HasCallStack => a
 onHeartbeatTimeout = error "Not implemented"

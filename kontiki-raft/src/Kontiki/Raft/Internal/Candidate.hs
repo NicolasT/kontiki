@@ -53,6 +53,8 @@ import qualified Kontiki.Raft.Classes.State.Volatile as Volatile
 import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startElectionTimer)
 import Kontiki.Raft.Classes.Types (Index, Term, index0, succTerm, term0)
 
+import {-# SOURCE #-} Kontiki.Raft.Internal.Follower (convertToFollower)
+import {-# SOURCE #-} qualified Kontiki.Raft.Internal.Follower as F
 import Kontiki.Raft.Internal.Leader (convertToLeader)
 import Kontiki.Raft.Internal.State (Some(Some), wrap)
 
@@ -216,11 +218,25 @@ onRequestVoteResponse sender resp = let Use.IxMonad{..} = def in do
             voteFor sender
 
 
-onAppendEntriesRequest :: a
-onAppendEntriesRequest = error "Not implemented"
+onAppendEntriesRequest :: forall m req resp volatileState mCC mFF.
+                          ( IxMonadState m
+                          , mCC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
+                          , mFF ~ m (volatileState 'Follower) (volatileState 'Follower)
+                          , MonadLogger mCC
+                          , MonadTimers mFF
+                          , VolatileState volatileState
+                          )
+                       => req
+                       -> m (volatileState 'Candidate) (volatileState 'Follower) resp
+onAppendEntriesRequest req = let Use.IxMonad{..} = def in do
+    $(logDebug) "Received AppendEntries request in Candidate mode, stepping down to Follower" :: mCC ()
+    convertToFollower
+    F.onAppendEntriesRequest req
 
-onAppendEntriesResponse :: a
-onAppendEntriesResponse = error "Not implemented"
+onAppendEntriesResponse :: MonadLogger m
+                        => node -> resp -> m ()
+onAppendEntriesResponse _ _ =
+    $(logDebug) "Received AppendEntries response in Candidate mode, ignoring"
 
 
 onElectionTimeout :: forall m config index node requestVoteRequest term volatileState mCC mLL.
