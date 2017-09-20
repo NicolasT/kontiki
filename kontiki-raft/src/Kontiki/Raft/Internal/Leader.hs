@@ -36,6 +36,7 @@ convertToLeader :: forall m mL {- mL = 'm in Leader state' -} volatileState.
                    ( IxMonadState m
                    , mL ~ m (volatileState 'Leader) (volatileState 'Leader)
                    , MonadTimers mL
+                   , Monad mL
                    , VolatileState volatileState
                    )
                 => m (volatileState 'Candidate) (volatileState 'Leader) ()
@@ -43,6 +44,11 @@ convertToLeader = let Use.IxMonad{..} = def in do
     imodify (convert CandidateToLeader)
     cancelElectionTimer
     startHeartbeatTimer @mL
+
+    sendInitialEmptyAppendEntriesRPCs
+  where
+    sendInitialEmptyAppendEntriesRPCs = let Use.Monad{..} = def in do
+        error "Not implemented"
 
 onRequestVoteRequest :: HasCallStack
                      => a

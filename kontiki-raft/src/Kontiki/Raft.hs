@@ -22,7 +22,7 @@ module Kontiki.Raft (
     , Role(..)
     ) where
 
-import Control.Monad.State.Class (MonadState(get, put))
+import Control.Monad.State.Class (MonadState, get, put)
 
 import Data.Default.Class (Default)
 
@@ -41,8 +41,8 @@ import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
--- import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
--- import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
+import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(setCurrentTerm, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState, Role(Follower, Candidate, Leader))
@@ -75,7 +75,7 @@ initializePersistentState = do
     setCurrentTerm term0
     setVotedFor Nothing
 
-onRequestVoteRequest :: forall m volatileState req resp node term.
+onRequestVoteRequest :: -- forall m volatileState req resp node term.
                         ( MonadState (S.Some volatileState) m
                         , MonadPersistentState m
                         , MonadTimers m
@@ -127,6 +127,47 @@ onRequestVoteResponse sender resp = do
         (runIxStateT $ L.onRequestVoteResponse sender resp)
 
 
+onAppendEntriesRequest :: ( MonadState (S.Some volatileState) m
+                          , MonadLogger m
+                          , MonadPersistentState m
+                          , MonadTimers m
+                          , VolatileState volatileState
+                          , RPC.Term req ~ P.Term m
+                          , Show req
+                          , AppendEntriesRequest req
+                          , Ord (P.Term m)
+                          )
+                       => req
+                       -> m resp
+onAppendEntriesRequest req = do
+    $(logDebugSH) ("onAppendEntriesRequest" :: Text, req)
+    checkTerm req
+    dispatch (runIxStateT (F.onAppendEntriesRequest req))
+             (runIxStateT (C.onAppendEntriesRequest req))
+             (runIxStateT (L.onAppendEntriesRequest req))
+
+onAppendEntriesResponse :: ( MonadState (S.Some volatileState) m
+                           , MonadLogger m
+                           , MonadPersistentState m
+                           , MonadTimers m
+                           , VolatileState volatileState
+                           , RPC.Term resp ~ P.Term m
+                           , Show resp
+                           , Show node
+                           , AppendEntriesResponse resp
+                           , Ord (P.Term m)
+                           )
+                        => node
+                        -> resp
+                        -> m ()
+onAppendEntriesResponse sender resp = do
+    $(logDebugSH) ("onAppendEntriesResponse" :: Text, sender, resp)
+    checkTerm resp
+    dispatch (runIxStateT (wrap $ F.onAppendEntriesResponse sender resp))
+             (runIxStateT (C.onAppendEntriesResponse sender resp))
+             (runIxStateT (L.onAppendEntriesResponse sender resp))
+
+
 onElectionTimeout :: ( RVReq.Node (RPC.RequestVoteRequest m) ~ Config.Node config
                      , MonadState (S.Some volatileState) m
                      , MonadReader config m
@@ -165,116 +206,6 @@ onHeartbeatTimeout = do
         (runIxStateT (wrap C.onHeartbeatTimeout))
         (runIxStateT L.onHeartbeatTimeout)
 
-
-
--- TODO
-onAppendEntriesRequest, onAppendEntriesResponse :: a
-onAppendEntriesRequest = undefined
-onAppendEntriesResponse = undefined
-
-
-{-
-onAppendEntriesRequest :: ( AppendEntriesRequest req
-                          , MonadPersistentState m
-                          , MonadState (S.SomeState volatileState volatileLeaderState) m
-                          , MonadLogger m
-                          , MonadTimers m
-                          , VolatileState volatileState
-                          , Default volatileState
-                          , RPC.Term req ~ term
-                          , P.Term m ~ term
-                          , Ord term
-                          , Show req
-                          , RPC.Term resp ~ term
-                          , AppendEntriesResponse resp
-                          , Default resp
-                          , HasCallStack
-                          )
-                       => req
-                       -> m resp
-onAppendEntriesRequest req = do
-    $(logDebugSH) ("onAppendEntriesRequest" :: Text, req)
-    A.checkTerm req
-    dispatchHandler
-        (F.onAppendEntriesRequest req)
-        (C.onAppendEntriesRequest req)
-        (L.onAppendEntriesRequest req)
-
-onAppendEntriesResponse :: ( AppendEntriesResponse resp
-                           , MonadPersistentState m
-                           , MonadState (S.SomeState volatileState volatileLeaderState) m
-                           , MonadLogger m
-                           , MonadTimers m
-                           , VolatileState volatileState
-                           , Default volatileState
-                           , RPC.Term resp ~ term
-                           , P.Term m ~ term
-                           , Ord term
-                           , Show resp
-                           , Show node
-                           , HasCallStack
-                           )
-                        => node
-                        -> resp
-                        -> m ()
-onAppendEntriesResponse sender resp = do
-    $(logDebugSH) ("onAppendEntriesResponse" :: Text, sender, resp)
-    A.checkTerm resp
-    dispatchHandler
-        (F.onAppendEntriesResponse sender resp)
-        (C.onAppendEntriesResponse sender resp)
-        (L.onAppendEntriesResponse sender resp)
-
-onElectionTimeout :: ( MonadState (S.SomeState v vl) m
-                     , MonadReader config m
-                     , MonadRPC m
-                     , MonadTimers m
-                     , MonadPersistentState m
-                     , MonadLogger m
-                     , VolatileState v
-                     , Config config
-                     , Term term
-                     , Index index
-                     , Default v
-                     , Default (RPC.RequestVoteRequest m)
-                     , RequestVoteRequest (RPC.RequestVoteRequest m)
-                     , RPC.Term (RPC.RequestVoteRequest m) ~ term
-                     , P.Term m ~ term
-                     , RVReq.Index (RPC.RequestVoteRequest m) ~ index
-                     , P.Index m ~ index
-                     , RVReq.Node (RPC.RequestVoteRequest m) ~ node
-                     , Config.Node config ~ node
-                     , Show term
-                     , HasCallStack
-                     )
-                  => m ()
-onElectionTimeout = dispatchHandler F.onElectionTimeout C.onElectionTimeout L.onElectionTimeout
-
-onHeartbeatTimeout :: ( MonadState (S.SomeState v vl) m
-                      , MonadLogger m
-                      , HasCallStack
-                      )
-                   => m ()
-onHeartbeatTimeout = dispatchHandler F.onHeartbeatTimeout C.onHeartbeatTimeout L.onHeartbeatTimeout
-
-
-dispatchHandler :: ( MonadState (S.SomeState v vl) m
-                   , HasCallStack
-                   )
-                => IxStateT m (S.State v vl 'S.Follower) (S.SomeState v vl) a
-                -> IxStateT m (S.State v vl 'S.Candidate) (S.SomeState v vl) a
-                -> IxStateT m (S.State v vl 'S.Leader) (S.SomeState v vl) a
-                -> m a
-dispatchHandler f c l = do
-    (r, s') <- get >>= \case
-        S.SomeState s -> case s of
-            S.F _ -> runIxStateT f s
-            S.C _ -> runIxStateT c s
-            S.L _ _ -> runIxStateT l s
-    put s'
-    return r
-
--}
 
 role :: VolatileState volatileState => S.Some volatileState -> Role
 role s = case s of

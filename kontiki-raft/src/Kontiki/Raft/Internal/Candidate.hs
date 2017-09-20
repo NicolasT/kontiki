@@ -15,6 +15,8 @@ module Kontiki.Raft.Internal.Candidate (
       convertToCandidate
     , onRequestVoteRequest
     , onRequestVoteResponse
+    , onAppendEntriesRequest
+    , onAppendEntriesResponse
 
     , onElectionTimeout
     , onHeartbeatTimeout
@@ -25,7 +27,7 @@ import Data.String (fromString)
 
 import qualified Data.Set as Set
 
-import Control.Lens ((^.), (.~), (&), (.=), (<%=), view)
+import Control.Lens ((^.), (.~), (&), (.=), (%=), use, view)
 
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
@@ -72,6 +74,7 @@ convertToCandidate :: ( IxMonadState m
                       , Ord (Config.Node config)
                       , MonadState (volatileState 'Candidate) (m (volatileState 'Candidate) (volatileState 'Candidate))
                       , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
+                      , Monad (m (volatileState 'Leader) (volatileState 'Leader))
                       )
                    => m (volatileState 'Follower) (Some volatileState) ()
 convertToCandidate = let Use.IxMonad{..} = def in do
@@ -89,6 +92,7 @@ startElection :: forall m config index node requestVoteRequest term volatileStat
                  , MonadRPC mCC
                  , MonadState (volatileState 'Candidate) mCC
                  , MonadTimers mLL
+                 , Monad mLL
 
                  , Config config
                  , Index index
@@ -147,8 +151,11 @@ startElection = let Use.IxMonad{..} = def in do
         iget >>= \case
             Some s -> dispatch remain runAct remain s
 
-voteFor :: ( IxMonadState m
-           , MonadState (volatileState 'Candidate) (m (volatileState 'Candidate) (volatileState 'Candidate))
+voteFor :: forall m volatileState node mC.
+           ( IxMonadState m
+           , mC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
+           , MonadState (volatileState 'Candidate) mC
+           , Monad (m (volatileState 'Leader) (volatileState 'Leader))
            , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
            , VolatileState volatileState
            , Volatile.Node volatileState ~ node
@@ -157,10 +164,14 @@ voteFor :: ( IxMonadState m
         => node
         -> m (volatileState 'Candidate) (Some volatileState) ()
 voteFor node = let Use.IxMonad{..} = def in do
-    votes <- votesGranted <%= Set.insert node
-    if Set.size votes == 2 -- TODO
-        then convertToLeader >> wrap
-        else wrap
+    votesGranted %= Set.insert node :: mC ()
+    votesReceivedFromMajorityOfServers >>= \case
+        True -> convertToLeader >> wrap
+        False -> wrap
+  where
+    votesReceivedFromMajorityOfServers = let Use.Monad{..} = def in do
+        votes <- use votesGranted
+        return $ Set.size votes == 2 -- TODO
 
 onRequestVoteRequest :: ( MonadLogger m
                         , MonadPersistentState m
@@ -183,6 +194,7 @@ onRequestVoteResponse :: forall m node resp term volatileState mCC.
                          , MonadLogger mCC
                          , MonadState (volatileState 'Candidate) mCC
                          , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
+                         , Monad (m (volatileState 'Leader) (volatileState 'Leader))
                          , VolatileState volatileState
                          , Eq term
                          , Ord node
@@ -203,6 +215,14 @@ onRequestVoteResponse sender resp = let Use.IxMonad{..} = def in do
         else
             voteFor sender
 
+
+onAppendEntriesRequest :: a
+onAppendEntriesRequest = error "Not implemented"
+
+onAppendEntriesResponse :: a
+onAppendEntriesResponse = error "Not implemented"
+
+
 onElectionTimeout :: forall m config index node requestVoteRequest term volatileState mCC mLL.
                      ( mCC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
                      , mLL ~ m (volatileState 'Leader) (volatileState 'Leader)
@@ -214,6 +234,7 @@ onElectionTimeout :: forall m config index node requestVoteRequest term volatile
                      , MonadRPC mCC
                      , MonadState (volatileState 'Candidate) mCC
                      , MonadTimers mLL
+                     , Monad mLL
                      , MonadLogger mCC
 
                      , Config config
@@ -241,8 +262,10 @@ onElectionTimeout = let Use.IxMonad{..} = def in do
     $(logInfo) "Election timeout while in Candidate mode, starting new election"
     startElection
 
-onHeartbeatTimeout :: a
-onHeartbeatTimeout = undefined
+onHeartbeatTimeout :: MonadLogger m
+                   => m ()
+onHeartbeatTimeout =
+    $(logDebug) "Received heartbeat timeout in Candidate mode, ignoring"
 
 
 ifThenElse :: Bool -> a -> a -> a

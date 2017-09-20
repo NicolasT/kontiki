@@ -7,8 +7,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
-
 module Kontiki.Raft.Internal.Follower (
       convertToFollower
     , onRequestVoteRequest
@@ -97,9 +95,9 @@ onRequestVoteRequest req = do
 
                     return $ def & term .~ currentTerm
                                  & voteGranted .~ candidateLogUpToDate
-                else do
+                else
                     return $ def & term .~ currentTerm
-                             & voteGranted .~ False
+                                 & voteGranted .~ False
   where
     isCandidateLogUpToDate _ = return True -- TODO
 
@@ -143,6 +141,7 @@ onElectionTimeout :: ( IxMonadState m
                      , Ord node
                      , MonadState (volatileState 'V.Candidate) (m (volatileState 'V.Candidate) (volatileState 'V.Candidate))
                      , MonadTimers (m (volatileState 'V.Leader) (volatileState 'V.Leader))
+                     , Monad (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                      )
                   => m (volatileState 'V.Follower) (Some volatileState) ()
 onElectionTimeout = convertToCandidate
