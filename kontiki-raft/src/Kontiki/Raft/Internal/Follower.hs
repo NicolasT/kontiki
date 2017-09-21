@@ -141,7 +141,11 @@ onElectionTimeout :: ( IxMonadState m
                      , Ord node
                      , MonadState (volatileState 'V.Candidate) (m (volatileState 'V.Candidate) (volatileState 'V.Candidate))
                      , MonadTimers (m (volatileState 'V.Leader) (volatileState 'V.Leader))
-                     , Monad (m (volatileState 'V.Leader) (volatileState 'V.Leader))
+                     , P.Index (m (volatileState 'V.Leader) (volatileState 'V.Leader)) ~ index
+                     , V.Index volatileState ~ index
+                     , MonadReader config (m (volatileState 'V.Leader) (volatileState 'V.Leader))
+                     , MonadPersistentState (m (volatileState 'V.Leader) (volatileState 'V.Leader))
+                     , MonadState (volatileState 'V.Leader) (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                      )
                   => m (volatileState 'V.Follower) (Some volatileState) ()
 onElectionTimeout = convertToCandidate

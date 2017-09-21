@@ -76,7 +76,11 @@ convertToCandidate :: ( IxMonadState m
                       , Ord (Config.Node config)
                       , MonadState (volatileState 'Candidate) (m (volatileState 'Candidate) (volatileState 'Candidate))
                       , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
-                      , Monad (m (volatileState 'Leader) (volatileState 'Leader))
+                      , MonadReader config (m (volatileState 'Leader) (volatileState 'Leader))
+                      , Persistent.Index (m (volatileState 'Leader) (volatileState 'Leader)) ~ Persistent.Index (m (volatileState 'Candidate) (volatileState 'Candidate))
+                      , Volatile.Index volatileState ~ Persistent.Index (m (volatileState 'Candidate) (volatileState 'Candidate))
+                      , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
+                      , MonadState (volatileState 'Leader) (m (volatileState 'Leader) (volatileState 'Leader))
                       )
                    => m (volatileState 'Follower) (Some volatileState) ()
 convertToCandidate = let Use.IxMonad{..} = def in do
@@ -94,7 +98,8 @@ startElection :: forall m config index node requestVoteRequest term volatileStat
                  , MonadRPC mCC
                  , MonadState (volatileState 'Candidate) mCC
                  , MonadTimers mLL
-                 , Monad mLL
+                 , MonadReader config mLL
+                 , MonadState (volatileState 'Leader) mLL
 
                  , Config config
                  , Index index
@@ -114,7 +119,10 @@ startElection :: forall m config index node requestVoteRequest term volatileStat
                  , RPC.RequestVoteRequest mCC ~ requestVoteRequest
 
                  , Persistent.Index mCC ~ index
+                 , Persistent.Index mLL ~ index
                  , RequestVoteRequest.Index requestVoteRequest ~ index
+                 , Volatile.Index volatileState ~ index
+                 , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
                  )
               => m (volatileState 'Candidate) (Some volatileState) ()
 startElection = let Use.IxMonad{..} = def in do
@@ -153,15 +161,21 @@ startElection = let Use.IxMonad{..} = def in do
         iget >>= \case
             Some s -> dispatch remain runAct remain s
 
-voteFor :: forall m volatileState node mC.
+voteFor :: forall m config volatileState node mC.
            ( IxMonadState m
            , mC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
            , MonadState (volatileState 'Candidate) mC
-           , Monad (m (volatileState 'Leader) (volatileState 'Leader))
            , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
+           , MonadReader config (m (volatileState 'Leader) (volatileState 'Leader))
            , VolatileState volatileState
            , Volatile.Node volatileState ~ node
            , Ord node
+           , Config.Node config ~ node
+           , Persistent.Index (m (volatileState 'Leader) (volatileState 'Leader)) ~ Volatile.Index volatileState
+           , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
+           , MonadState (volatileState 'Leader) (m (volatileState 'Leader) (volatileState 'Leader))
+           , Config config
+           , Index (Volatile.Index volatileState)
            )
         => node
         -> m (volatileState 'Candidate) (Some volatileState) ()
@@ -189,14 +203,14 @@ onRequestVoteRequest _ = let Use.Monad{..} = def in do
     return $ def & term .~ term'
                  & voteGranted .~ False
 
-onRequestVoteResponse :: forall m node resp term volatileState mCC.
+onRequestVoteResponse :: forall m config node resp term volatileState mCC.
                          ( IxMonadState m
                          , mCC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
                          , MonadPersistentState mCC
                          , MonadLogger mCC
                          , MonadState (volatileState 'Candidate) mCC
                          , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
-                         , Monad (m (volatileState 'Leader) (volatileState 'Leader))
+                         , MonadReader config (m (volatileState 'Leader) (volatileState 'Leader))
                          , VolatileState volatileState
                          , Eq term
                          , Ord node
@@ -204,6 +218,12 @@ onRequestVoteResponse :: forall m node resp term volatileState mCC.
                          , RPC.Term resp ~ term
                          , Volatile.Node volatileState ~ node
                          , RequestVoteResponse resp
+                         , Persistent.Index (m (volatileState 'Leader) (volatileState 'Leader)) ~ Volatile.Index volatileState
+                         , Config config
+                         , Config.Node config ~ node
+                         , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
+                         , MonadState (volatileState 'Leader) (m (volatileState 'Leader) (volatileState 'Leader))
+                         , Index (Volatile.Index volatileState)
                          )
                       => node
                       -> resp
@@ -250,8 +270,10 @@ onElectionTimeout :: forall m config index node requestVoteRequest term volatile
                      , MonadRPC mCC
                      , MonadState (volatileState 'Candidate) mCC
                      , MonadTimers mLL
-                     , Monad mLL
                      , MonadLogger mCC
+                     , MonadReader config mLL
+                     , MonadState (volatileState 'Leader) mLL
+                     , MonadPersistentState mLL
 
                      , Config config
                      , Index index
@@ -272,6 +294,8 @@ onElectionTimeout :: forall m config index node requestVoteRequest term volatile
 
                      , Persistent.Index mCC ~ index
                      , RequestVoteRequest.Index requestVoteRequest ~ index
+                     , Persistent.Index mLL ~ index
+                     , Volatile.Index volatileState ~ index
                      )
                   => m (volatileState 'Candidate) (Some volatileState) ()
 onElectionTimeout = let Use.IxMonad{..} = def in do

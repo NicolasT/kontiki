@@ -111,6 +111,11 @@ onRequestVoteResponse :: ( MonadState (S.Some volatileState) m
                          , RequestVoteResponse resp
                          , Show resp
                          , Ord (P.Term m)
+                         , MonadReader config m
+                         , Config config
+                         , Config.Node config ~ node
+                         , P.Index m ~ V.Index volatileState
+                         , Index (V.Index volatileState)
                          )
                       => node
                       -> resp
@@ -187,6 +192,7 @@ onElectionTimeout :: ( RVReq.Node (RPC.RequestVoteRequest m) ~ Config.Node confi
                      , MonadPersistentState m
                      , Config config
                      , Index (RVReq.Index (RPC.RequestVoteRequest m))
+                     , V.Index volatileState ~ RVReq.Index (RPC.RequestVoteRequest m)
                      )
                   => m ()
 onElectionTimeout = do
