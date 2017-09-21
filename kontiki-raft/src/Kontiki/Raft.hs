@@ -40,6 +40,7 @@ import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RVReq
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse)
 import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AEReq
 import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(setCurrentTerm, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
@@ -116,6 +117,14 @@ onRequestVoteResponse :: ( MonadState (S.Some volatileState) m
                          , Config.Node config ~ node
                          , P.Index m ~ V.Index volatileState
                          , Index (V.Index volatileState)
+                         , RPC.Node m ~ node
+                         , AEReq.Index (RPC.AppendEntriesRequest m) ~ V.Index volatileState
+                         , RPC.Term (RPC.AppendEntriesRequest m) ~ P.Term m
+                         , AEReq.Node (RPC.AppendEntriesRequest m) ~ node
+                         , Term (P.Term m)
+                         , Default (RPC.AppendEntriesRequest m)
+                         , AppendEntriesRequest (RPC.AppendEntriesRequest m)
+                         , MonadRPC m
                          )
                       => node
                       -> resp
@@ -193,6 +202,12 @@ onElectionTimeout :: ( RVReq.Node (RPC.RequestVoteRequest m) ~ Config.Node confi
                      , Config config
                      , Index (RVReq.Index (RPC.RequestVoteRequest m))
                      , V.Index volatileState ~ RVReq.Index (RPC.RequestVoteRequest m)
+                     , AEReq.Index (RPC.AppendEntriesRequest m) ~ RVReq.Index (RPC.RequestVoteRequest m)
+                     , AEReq.Node (RPC.AppendEntriesRequest m) ~ Config.Node config
+                     , RPC.Node m ~ Config.Node config
+                     , RPC.Term (RPC.AppendEntriesRequest m) ~ RPC.Term (RPC.RequestVoteRequest m)
+                     , AppendEntriesRequest (RPC.AppendEntriesRequest m)
+                     , Default (RPC.AppendEntriesRequest m)
                      )
                   => m ()
 onElectionTimeout = do

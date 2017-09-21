@@ -46,6 +46,8 @@ import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest, candidateId, lastLogIndex, lastLogTerm)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RequestVoteRequest
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse, voteGranted)
+import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AppendEntriesRequest
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState, getCurrentTerm, setCurrentTerm, lastLogEntry)
 import qualified Kontiki.Raft.Classes.State.Persistent as Persistent
 import Kontiki.Raft.Classes.State.Volatile (Conversion(FollowerToCandidate), Role(Candidate, Follower, Leader), VolatileState, convert, dispatch, votesGranted)
@@ -81,6 +83,14 @@ convertToCandidate :: ( IxMonadState m
                       , Volatile.Index volatileState ~ Persistent.Index (m (volatileState 'Candidate) (volatileState 'Candidate))
                       , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
                       , MonadState (volatileState 'Leader) (m (volatileState 'Leader) (volatileState 'Leader))
+                      , RPC.Node (m (volatileState 'Leader) (volatileState 'Leader)) ~ Config.Node config
+                      , AppendEntriesRequest.Index (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ Persistent.Index (m (volatileState 'Leader) (volatileState 'Leader))
+                      , AppendEntriesRequest.Node (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ Config.Node config
+                      , Persistent.Term (m (volatileState 'Leader) (volatileState 'Leader)) ~ RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                      , Term (RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))))
+                      , Default (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                      , AppendEntriesRequest (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                      , MonadRPC (m (volatileState 'Leader) (volatileState 'Leader))
                       )
                    => m (volatileState 'Follower) (Some volatileState) ()
 convertToCandidate = let Use.IxMonad{..} = def in do
@@ -100,6 +110,7 @@ startElection :: forall m config index node requestVoteRequest term volatileStat
                  , MonadTimers mLL
                  , MonadReader config mLL
                  , MonadState (volatileState 'Leader) mLL
+                 , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
 
                  , Config config
                  , Index index
@@ -111,6 +122,8 @@ startElection :: forall m config index node requestVoteRequest term volatileStat
                  , Config.Node config ~ node
                  , RequestVoteRequest.Node requestVoteRequest ~ node
                  , Volatile.Node volatileState ~ node
+                 , RPC.Node (m (volatileState 'Leader) (volatileState 'Leader)) ~ node
+                 , AppendEntriesRequest.Node (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ node
 
                  , Term term
                  , Persistent.Term mCC ~ term
@@ -122,7 +135,12 @@ startElection :: forall m config index node requestVoteRequest term volatileStat
                  , Persistent.Index mLL ~ index
                  , RequestVoteRequest.Index requestVoteRequest ~ index
                  , Volatile.Index volatileState ~ index
-                 , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
+                 , AppendEntriesRequest.Index (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ index
+                 , Persistent.Term (m (volatileState 'Leader) (volatileState 'Leader)) ~ RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                 , Term (RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))))
+                 , Default (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                 , AppendEntriesRequest (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                 , MonadRPC (m (volatileState 'Leader) (volatileState 'Leader))
                  )
               => m (volatileState 'Candidate) (Some volatileState) ()
 startElection = let Use.IxMonad{..} = def in do
@@ -166,6 +184,7 @@ voteFor :: forall m config volatileState node mC.
            , mC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
            , MonadState (volatileState 'Candidate) mC
            , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
+           , MonadReader config mC
            , MonadReader config (m (volatileState 'Leader) (volatileState 'Leader))
            , VolatileState volatileState
            , Volatile.Node volatileState ~ node
@@ -176,6 +195,14 @@ voteFor :: forall m config volatileState node mC.
            , MonadState (volatileState 'Leader) (m (volatileState 'Leader) (volatileState 'Leader))
            , Config config
            , Index (Volatile.Index volatileState)
+           , RPC.Node (m (volatileState 'Leader) (volatileState 'Leader)) ~ node
+           , AppendEntriesRequest.Index (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ Volatile.Index volatileState
+           , AppendEntriesRequest.Node (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ node
+           , Persistent.Term (m (volatileState 'Leader) (volatileState 'Leader)) ~ RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+           , Term (RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))))
+           , Default (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+           , AppendEntriesRequest (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+           , MonadRPC (m (volatileState 'Leader) (volatileState 'Leader))
            )
         => node
         -> m (volatileState 'Candidate) (Some volatileState) ()
@@ -187,7 +214,9 @@ voteFor node = let Use.IxMonad{..} = def in do
   where
     votesReceivedFromMajorityOfServers = let Use.Monad{..} = def in do
         votes <- use votesGranted
-        return $ Set.size votes == 2 -- TODO
+        nodes' <- view Config.nodes
+        return $ isQuorum votes nodes'
+    isQuorum v n = Set.size v >= (Set.size n `div` 2) + 1
 
 onRequestVoteRequest :: ( MonadLogger m
                         , MonadPersistentState m
@@ -210,6 +239,7 @@ onRequestVoteResponse :: forall m config node resp term volatileState mCC.
                          , MonadLogger mCC
                          , MonadState (volatileState 'Candidate) mCC
                          , MonadTimers (m (volatileState 'Leader) (volatileState 'Leader))
+                         , MonadReader config mCC
                          , MonadReader config (m (volatileState 'Leader) (volatileState 'Leader))
                          , VolatileState volatileState
                          , Eq term
@@ -224,6 +254,14 @@ onRequestVoteResponse :: forall m config node resp term volatileState mCC.
                          , MonadPersistentState (m (volatileState 'Leader) (volatileState 'Leader))
                          , MonadState (volatileState 'Leader) (m (volatileState 'Leader) (volatileState 'Leader))
                          , Index (Volatile.Index volatileState)
+                         , Persistent.Term (m (volatileState 'Leader) (volatileState 'Leader)) ~ RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                         , AppendEntriesRequest.Node (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ node
+                         , RPC.Node (m (volatileState 'Leader) (volatileState 'Leader)) ~ node
+                         , AppendEntriesRequest.Index (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))) ~ Volatile.Index volatileState
+                         , Term (RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader))))
+                         , Default (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                         , AppendEntriesRequest (RPC.AppendEntriesRequest (m (volatileState 'Leader) (volatileState 'Leader)))
+                         , MonadRPC (m (volatileState 'Leader) (volatileState 'Leader))
                          )
                       => node
                       -> resp
@@ -274,6 +312,7 @@ onElectionTimeout :: forall m config index node requestVoteRequest term volatile
                      , MonadReader config mLL
                      , MonadState (volatileState 'Leader) mLL
                      , MonadPersistentState mLL
+                     , MonadRPC mLL
 
                      , Config config
                      , Index index
@@ -281,14 +320,20 @@ onElectionTimeout :: forall m config index node requestVoteRequest term volatile
                      , RequestVoteRequest requestVoteRequest
                      , Default requestVoteRequest
                      , Ord node
+                     , Default (RPC.AppendEntriesRequest mLL)
+                     , AppendEntriesRequest (RPC.AppendEntriesRequest mLL)
 
                      , Config.Node config ~ node
                      , RequestVoteRequest.Node requestVoteRequest ~ node
                      , Volatile.Node volatileState ~ node
+                     , RPC.Node mLL ~ node
+                     , AppendEntriesRequest.Node (RPC.AppendEntriesRequest mLL) ~ node
 
                      , Term term
                      , Persistent.Term mCC ~ term
                      , RPC.Term requestVoteRequest ~ term
+                     , Persistent.Term mLL ~ term
+                     , RPC.Term (RPC.AppendEntriesRequest mLL) ~ term
 
                      , RPC.RequestVoteRequest mCC ~ requestVoteRequest
 
@@ -296,6 +341,7 @@ onElectionTimeout :: forall m config index node requestVoteRequest term volatile
                      , RequestVoteRequest.Index requestVoteRequest ~ index
                      , Persistent.Index mLL ~ index
                      , Volatile.Index volatileState ~ index
+                     , AppendEntriesRequest.Index (RPC.AppendEntriesRequest mLL) ~ index
                      )
                   => m (volatileState 'Candidate) (Some volatileState) ()
 onElectionTimeout = let Use.IxMonad{..} = def in do

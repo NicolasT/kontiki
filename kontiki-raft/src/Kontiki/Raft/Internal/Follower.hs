@@ -42,6 +42,8 @@ import Kontiki.Raft.Classes.RPC.RequestVoteRequest (RequestVoteRequest, candidat
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RequestVoteRequest
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (voteGranted)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
+import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
+import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AppendEntriesRequest
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTerm, getVotedFor, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState)
@@ -146,6 +148,14 @@ onElectionTimeout :: ( IxMonadState m
                      , MonadReader config (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                      , MonadPersistentState (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                      , MonadState (volatileState 'V.Leader) (m (volatileState 'V.Leader) (volatileState 'V.Leader))
+                     , P.Term (m (volatileState 'V.Leader) (volatileState 'V.Leader)) ~ RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'V.Leader) (volatileState 'V.Leader)))
+                     , AppendEntriesRequest.Node (RPC.AppendEntriesRequest (m (volatileState 'V.Leader) (volatileState 'V.Leader))) ~ node
+                     , RPC.Node (m (volatileState 'V.Leader) (volatileState 'V.Leader)) ~ node
+                     , AppendEntriesRequest.Index (RPC.AppendEntriesRequest (m (volatileState 'V.Leader) (volatileState 'V.Leader))) ~ index
+                     , T.Term (RPC.Term (RPC.AppendEntriesRequest (m (volatileState 'V.Leader) (volatileState 'V.Leader))))
+                     , Default (RPC.AppendEntriesRequest (m (volatileState 'V.Leader) (volatileState 'V.Leader)))
+                     , AppendEntriesRequest (RPC.AppendEntriesRequest (m (volatileState 'V.Leader) (volatileState 'V.Leader)))
+                     , MonadRPC (m (volatileState 'V.Leader) (volatileState 'V.Leader))
                      )
                   => m (volatileState 'V.Follower) (Some volatileState) ()
 onElectionTimeout = convertToCandidate

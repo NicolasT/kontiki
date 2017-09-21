@@ -24,12 +24,14 @@ module Kontiki.Raft.Internal.Leader (
 import Prelude hiding ((>>), (>>=), return)
 import Data.String (fromString)
 
+import Control.Monad (unless, forM_)
+
 import GHC.Stack (HasCallStack)
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
-import Control.Lens ((&), (.~), (.=), view)
+import Control.Lens ((&), (.~), (.=), use, view)
 
 import Control.Monad.Logger (MonadLogger, logDebug)
 
@@ -41,20 +43,23 @@ import Control.Monad.Indexed.State (IxMonadState, imodify)
 
 import qualified Language.Haskell.Rebindable.Do as Use
 
-import Kontiki.Raft.Classes.Config (Config, nodes)
+import Kontiki.Raft.Classes.Config (Config, localNode, nodes)
 import qualified Kontiki.Raft.Classes.Config as Config
-import Kontiki.Raft.Classes.RPC (term)
+import Kontiki.Raft.Classes.RPC (MonadRPC, sendAppendEntriesRequest, term)
 import qualified Kontiki.Raft.Classes.RPC as RPC
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse, voteGranted)
+import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest, leaderId, prevLogIndex, prevLogTerm, entries, leaderCommit)
+import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as
+        AppendEntriesRequest
 import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse, success)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState, getCurrentTerm, lastLogEntry)
 import qualified Kontiki.Raft.Classes.State.Persistent as Persistent
 import Kontiki.Raft.Classes.State.Volatile (
     Conversion(CandidateToLeader), Role(Candidate, Leader), VolatileState,
-    convert, matchIndex, nextIndex)
+    commitIndex, convert, matchIndex, nextIndex)
 import qualified Kontiki.Raft.Classes.State.Volatile as Volatile
 import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startHeartbeatTimer)
-import Kontiki.Raft.Classes.Types (Index, index0, succIndex)
+import Kontiki.Raft.Classes.Types (Index, Term, index0, succIndex, term0)
 
 convertToLeader :: forall m config mL {- mL = 'm in Leader state' -} volatileState.
                    ( IxMonadState m
@@ -71,6 +76,14 @@ convertToLeader :: forall m config mL {- mL = 'm in Leader state' -} volatileSta
                    , Ord (Config.Node config)
                    , Persistent.Index mL ~ Volatile.Index volatileState
                    , Config.Node config ~ Volatile.Node volatileState
+                   , Persistent.Term mL ~ RPC.Term (RPC.AppendEntriesRequest mL)
+                   , AppendEntriesRequest.Index (RPC.AppendEntriesRequest mL) ~ Volatile.Index volatileState
+                   , AppendEntriesRequest.Node (RPC.AppendEntriesRequest mL) ~ Volatile.Node volatileState
+                   , RPC.Node mL ~ Volatile.Node volatileState
+                   , Term (RPC.Term (RPC.AppendEntriesRequest mL))
+                   , Default (RPC.AppendEntriesRequest mL)
+                   , AppendEntriesRequest (RPC.AppendEntriesRequest mL)
+                   , MonadRPC mL
                    )
                 => m (volatileState 'Candidate) (volatileState 'Leader) ()
 convertToLeader = let Use.IxMonad{..} = def in do
@@ -100,7 +113,24 @@ convertToLeader = let Use.IxMonad{..} = def in do
         matchIndex .= Map.fromList [(node, index0) | node <- Set.toList nodes']
 
     sendInitialEmptyAppendEntriesRPCs = let Use.Monad{..} = def in do
-        error "Not implemented"
+        self <- view localNode
+        nodes' <- view nodes
+        commitIndex' <- use commitIndex
+        term' <- getCurrentTerm
+        (lastLogIndex, lastLogTerm) <- lastLogEntry >>= \case
+            Nothing -> return (index0, term0)
+            Just (lastLogIndex, lastLogTerm, _) -> return (lastLogIndex, lastLogTerm)
+
+        let msg = def & term .~ term'
+                      & leaderId .~ self
+                      & prevLogIndex .~ lastLogIndex
+                      & prevLogTerm .~ lastLogTerm
+                      & entries .~ []
+                      & leaderCommit .~ commitIndex'
+
+        forM_ nodes' $ \node ->
+            unless (node == self) $
+                sendAppendEntriesRequest node msg
 
 onRequestVoteRequest :: ( MonadLogger m
                         , MonadPersistentState m
