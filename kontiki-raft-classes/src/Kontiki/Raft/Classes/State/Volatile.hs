@@ -15,8 +15,11 @@ module Kontiki.Raft.Classes.State.Volatile (
     , HasCommitIndex(..)
     , HasLastApplied(..)
     , HasVotesGranted(..)
+    , HasNextIndex(..)
+    , HasMatchIndex(..)
     ) where
 
+import Data.Map (Map)
 import Data.Set (Set)
 
 import Kontiki.Raft.Classes.Lens (Lens')
@@ -37,6 +40,12 @@ class HasLastApplied s a | s -> a where
 
 class HasVotesGranted s a | s -> a where
     votesGranted :: Lens' s a
+
+class HasNextIndex s a | s -> a where
+    nextIndex :: Lens' s a
+
+class HasMatchIndex s a | s -> a where
+    matchIndex :: Lens' s a
 
 class ( VolatileFollowerState (s 'Follower)
       , VolatileCandidateState (s 'Candidate)
@@ -64,6 +73,8 @@ class ( HasCommitIndex s (Index (Base s))
 
 class ( HasCommitIndex s (Index (Base s))
       , HasLastApplied s (Index (Base s))
+      , HasNextIndex s (Map (Node (Base s)) (Index (Base s)))
+      , HasMatchIndex s (Map (Node (Base s)) (Index (Base s)))
       ) => VolatileLeaderState s
 
 type family Base s where

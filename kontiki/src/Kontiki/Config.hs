@@ -7,6 +7,8 @@ module Kontiki.Config (
 
 import Control.Lens (to)
 
+import qualified Data.Set as Set
+
 import qualified Data.Text.Lazy as Text
 
 import qualified Kontiki.Raft.Classes.Config as Config
@@ -23,6 +25,7 @@ instance Config.Config Config where
     type Node Config = T.Node
 
     localNode = to configLocalNode
+    nodes = to (Set.fromList . map (T.Node . Text.toStrict . CLI.name) . CLI.nodes . configCluster)
 
 localNode :: Config -> CLI.Node
 localNode cfg = case lookup (Text.fromStrict $ T.getNode $ configLocalNode cfg) nodeMap of

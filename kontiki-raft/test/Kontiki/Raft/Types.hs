@@ -36,6 +36,8 @@ import Control.Lens (lens)
 
 import Data.Default (Default(def))
 
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -228,7 +230,7 @@ runPersistentStateT s a = runStateT (unPersistentStateT a) s
 data VolatileState r where
     Follower :: Index -> Index -> VolatileState 'V.Follower
     Candidate :: Index -> Index -> Set Node -> VolatileState 'V.Candidate
-    Leader :: Index -> Index -> VolatileState 'V.Leader
+    Leader :: Index -> Index -> Map Node Index -> Map Node Index -> VolatileState 'V.Leader
 
 deriving instance Eq (VolatileState r)
 deriving instance Show (VolatileState r)
@@ -242,15 +244,15 @@ instance V.VolatileState VolatileState where
         V.FollowerToCandidate -> case s of
             Follower a b -> Candidate a b Set.empty
         V.CandidateToLeader -> case s of
-            Candidate a b _ -> Leader a b
+            Candidate a b _ -> Leader a b Map.empty Map.empty
         V.AnyToFollower -> case s of
             Follower a b -> Follower a b
             Candidate a b _ -> Follower a b
-            Leader a b -> Follower a b
+            Leader a b _ _ -> Follower a b
     dispatch f c l s = case s of
-        Follower _ _ -> f s
-        Candidate _ _ _ -> c s
-        Leader _ _ -> l s
+        Follower{} -> f s
+        Candidate{} -> c s
+        Leader{} -> l s
 
 instance V.VolatileFollowerState (VolatileState 'V.Follower)
 instance V.VolatileCandidateState (VolatileState 'V.Candidate)
@@ -261,22 +263,22 @@ instance V.HasCommitIndex (VolatileState r) Index where
         (\case
             Follower a _ -> a
             Candidate a _ _ -> a
-            Leader a _ -> a)
+            Leader a _ _ _ -> a)
         (\s i -> case s of
             Follower _ a -> Follower i a
             Candidate _ a b -> Candidate i a b
-            Leader _ a -> Leader i a)
+            Leader _ a b c -> Leader i a b c)
 
 instance V.HasLastApplied (VolatileState r) Index where
     lastApplied = lens
         (\case
             Follower _ a -> a
             Candidate _ a _ -> a
-            Leader _ a -> a)
+            Leader _ a _ _ -> a)
         (\s i -> case s of
             Follower a _ -> Follower a i
             Candidate a _ b -> Candidate a i b
-            Leader a _ -> Leader a i)
+            Leader a _ b c -> Leader a i b c)
 
 instance V.HasVotesGranted (VolatileState 'V.Candidate) (Set Node) where
     votesGranted = lens
@@ -284,6 +286,20 @@ instance V.HasVotesGranted (VolatileState 'V.Candidate) (Set Node) where
             Candidate _ _ a -> a)
         (\s i -> case s of
             Candidate a b _ -> Candidate a b i)
+
+instance V.HasNextIndex (VolatileState 'V.Leader) (Map Node Index) where
+    nextIndex = lens
+        (\case
+            Leader _ _ n _ -> n)
+        (\s i -> case s of
+            Leader a b _ c -> Leader a b i c)
+
+instance V.HasMatchIndex (VolatileState 'V.Leader) (Map Node Index) where
+    matchIndex = lens
+        (\case
+            Leader _ _ _ n -> n)
+        (\s i -> case s of
+            Leader a b c _ -> Leader a b c i)
 
 instance Default (VolatileState 'V.Candidate) where
     def = Candidate def def def
@@ -295,7 +311,7 @@ instance Arbitrary (VolatileState 'V.Candidate) where
     arbitrary = Candidate <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary (VolatileState 'V.Leader) where
-    arbitrary = Leader <$> arbitrary <*> arbitrary
+    arbitrary = Leader <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 
 newtype TimersT m a = TimersT { unTimersT :: WriterT [TimerEvent] m a }

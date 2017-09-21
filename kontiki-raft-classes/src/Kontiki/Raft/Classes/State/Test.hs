@@ -13,6 +13,7 @@ import Test.Tasty (TestTree, testGroup)
 
 import Kontiki.Raft.Classes.State.Volatile (
     HasCommitIndex(commitIndex), HasLastApplied(lastApplied), HasVotesGranted(votesGranted),
+    HasNextIndex(nextIndex), HasMatchIndex(matchIndex),
     Role(Candidate, Follower, Leader), VolatileState(Index, Node))
 import Kontiki.Raft.Classes.Test.Utils (PropLensConstraints, prop_lens, typeId)
 
@@ -37,5 +38,7 @@ tests = testGroup "Kontiki.Raft.Classes.State" [
     , testGroup ("VolatileState 'Leader @" ++ typeId @(volatileState 'Leader)) [
           prop_lens @(volatileState 'Leader) "commitIndex" commitIndex
         , prop_lens @(volatileState 'Leader) "lastApplied" lastApplied
+        , prop_lens @(volatileState 'Leader) "nextIndex" nextIndex
+        , prop_lens @(volatileState 'Leader) "matchIndex" matchIndex
         ]
     ]

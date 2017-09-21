@@ -21,7 +21,7 @@ import GHC.Generics (Generic)
 import Data.Text (Text)
 import Data.Text.Arbitrary ()
 
-import Data.Aeson (ToJSON(toJSON), (.=), object)
+import Data.Aeson (ToJSON(toJSON), ToJSONKey, (.=), object)
 
 import qualified Data.Vector as V
 
@@ -99,6 +99,8 @@ instance Arbitrary Node where
 
 instance ToJSON Node where
     toJSON = toJSON . getNode
+
+instance ToJSONKey Node
 
 instance Hashable Node where
     hashWithSalt s = hashWithSalt s . getNode

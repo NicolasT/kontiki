@@ -15,6 +15,8 @@ module Kontiki.State.Volatile (
 import Control.Lens (lens)
 -- import Data.Default (Default(def))
 
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -52,6 +54,8 @@ instance K.VolatileState VolatileState where
         K.CandidateToLeader -> case s of
             Candidate s' -> Leader $ LeaderState { leaderStateCommitIndex = candidateStateCommitIndex s'
                                                  , leaderStateLastApplied = candidateStateLastApplied s'
+                                                 , leaderStateNextIndex = Map.empty
+                                                 , leaderStateMatchIndex = Map.empty
                                                  }
         K.AnyToFollower -> case s of
             Follower s' -> Follower s'
@@ -94,6 +98,21 @@ instance K.HasVotesGranted (VolatileState 'K.Candidate) (Set Node) where
             Candidate s -> candidateStateVotesGranted s)
         (\s i -> case s of
             Candidate s' -> Candidate $ s' { candidateStateVotesGranted = i })
+
+instance K.HasNextIndex (VolatileState 'K.Leader) (Map Node Index) where
+    nextIndex = lens
+        (\case
+            Leader s -> leaderStateNextIndex s)
+        (\s i -> case s of
+            Leader s' -> Leader $ s' { leaderStateNextIndex = i })
+
+instance K.HasMatchIndex (VolatileState 'K.Leader) (Map Node Index) where
+    matchIndex = lens
+        (\case
+            Leader s -> leaderStateMatchIndex s)
+        (\s i -> case s of
+            Leader s' -> Leader $ s' { leaderStateMatchIndex = i })
+
 
 instance K.VolatileFollowerState (VolatileState 'K.Follower)
 instance K.VolatileCandidateState (VolatileState 'K.Candidate)
@@ -151,6 +170,8 @@ instance Arbitrary CandidateState where
 
 data LeaderState = LeaderState { leaderStateCommitIndex :: {-# UNPACK #-} !Index
                                , leaderStateLastApplied :: {-# UNPACK #-} !Index
+                               , leaderStateNextIndex :: !(Map Node Index)
+                               , leaderStateMatchIndex :: !(Map Node Index)
                                }
     deriving (Eq, Show)
 
@@ -158,8 +179,12 @@ instance ToJSON LeaderState where
     toJSON s = object [ "role" .= ("leader" :: Text)
                       , "commitIndex" .= leaderStateCommitIndex s
                       , "lastApplied" .= leaderStateLastApplied s
+                      , "nextIndex" .= leaderStateNextIndex s
+                      , "matchIndex" .= leaderStateMatchIndex s
                       ]
 
 instance Arbitrary LeaderState where
     arbitrary = LeaderState <$> arbitrary
+                            <*> arbitrary
+                            <*> arbitrary
                             <*> arbitrary
