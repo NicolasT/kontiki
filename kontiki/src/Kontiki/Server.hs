@@ -143,7 +143,7 @@ main' grpcToken config store = do
             high = ms + q
         msDelay <$> randomRIO (low, high)
 
-    timers <- liftIO $ Timers.newTimers (mkTimeout 1000) (mkTimeout 500)
+    timers <- liftIO $ Timers.newTimers (mkTimeout 1000) (mkTimeout 200)
 
     ekgHost <- BS8.pack <$> (liftIO $ getEnv "EKG_HOST")
     ekgPort <- read <$> (liftIO $ getEnv "EKG_PORT")

@@ -57,6 +57,7 @@ checkTerm :: forall m m' r msg volatileState term.
              ( IxMonadState m
              , MonadPersistentState m'
              , MonadLogger m'
+             , Monad (m (volatileState 'Follower) (volatileState 'Follower))
              , MonadTimers (m (volatileState 'Follower) (volatileState 'Follower))
              , m' ~ m (volatileState r) (volatileState r)
              , term ~ P.Term m'

@@ -156,11 +156,9 @@ onAppendEntriesRequest :: ( MonadState (S.Some volatileState) m
 onAppendEntriesRequest req = do
     $(logDebugSH) ("onAppendEntriesRequest" :: Text, req)
     checkTerm req
-    dispatch (runIxStateT (F.onAppendEntriesRequest req))
-             (runIxStateT (C.onAppendEntriesRequest req >>>= \r -> S.wrap >>> ireturn r))
+    dispatch (runIxStateT (wrap $ F.onAppendEntriesRequest req))
+             (runIxStateT (wrap' $ C.onAppendEntriesRequest req))
              (runIxStateT (wrap $ L.onAppendEntriesRequest req))
-  where
-    a >>> b = a >>>= \() -> b
 
 onAppendEntriesResponse :: ( MonadState (S.Some volatileState) m
                            , MonadLogger m
@@ -220,6 +218,21 @@ onElectionTimeout = do
 onHeartbeatTimeout :: ( MonadLogger m
                       , VolatileState volatileState
                       , MonadState (S.Some volatileState) m
+                      , MonadReader config m
+                      , MonadPersistentState m
+                      , MonadRPC m
+                      , MonadTimers m
+                      , AppendEntriesRequest (RPC.AppendEntriesRequest m)
+                      , Default (RPC.AppendEntriesRequest m)
+                      , Eq (RPC.Node m)
+                      , Index (V.Index volatileState)
+                      , Term (RPC.Term (RPC.AppendEntriesRequest m))
+                      , Config config
+                      , Config.Node config ~ RPC.Node m
+                      , AEReq.Node (RPC.AppendEntriesRequest m) ~ RPC.Node m
+                      , P.Term m ~ RPC.Term (RPC.AppendEntriesRequest m)
+                      , P.Index m ~ AEReq.Index (RPC.AppendEntriesRequest m)
+                      , P.Index m ~ V.Index volatileState
                       )
                    => m ()
 onHeartbeatTimeout = do
@@ -227,7 +240,7 @@ onHeartbeatTimeout = do
     dispatch
         (runIxStateT (wrap F.onHeartbeatTimeout))
         (runIxStateT (wrap C.onHeartbeatTimeout))
-        (runIxStateT L.onHeartbeatTimeout)
+        (runIxStateT (wrap L.onHeartbeatTimeout))
 
 
 role :: VolatileState volatileState => S.Some volatileState -> Role
@@ -248,6 +261,9 @@ checkTerm :: ( MonadPersistentState m
 checkTerm req = dispatch (runIxStateT $ A.checkTerm req)
                          (runIxStateT $ A.checkTerm req)
                          (runIxStateT $ A.checkTerm req)
+
+wrap' :: Monad m => IxStateT m (volatileState r) (volatileState r') a -> IxStateT m (volatileState r) (S.Some volatileState) a
+wrap' act = act >>>= \r -> S.wrap >>>= \() -> ireturn r
 
 wrap :: Monad m => IxStateT m (volatileState r) (volatileState r) a -> IxStateT m (volatileState r) (S.Some volatileState) a
 wrap act = act >>>= \r -> S.wrap >>>= \() -> ireturn r

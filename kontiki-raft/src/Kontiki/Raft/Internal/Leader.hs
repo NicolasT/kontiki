@@ -112,25 +112,7 @@ convertToLeader = let Use.IxMonad{..} = def in do
         nodes' <- view nodes
         matchIndex .= Map.fromList [(node, index0) | node <- Set.toList nodes']
 
-    sendInitialEmptyAppendEntriesRPCs = let Use.Monad{..} = def in do
-        self <- view localNode
-        nodes' <- view nodes
-        commitIndex' <- use commitIndex
-        term' <- getCurrentTerm
-        (lastLogIndex, lastLogTerm) <- lastLogEntry >>= \case
-            Nothing -> return (index0, term0)
-            Just (lastLogIndex, lastLogTerm, _) -> return (lastLogIndex, lastLogTerm)
-
-        let msg = def & term .~ term'
-                      & leaderId .~ self
-                      & prevLogIndex .~ lastLogIndex
-                      & prevLogTerm .~ lastLogTerm
-                      & entries .~ []
-                      & leaderCommit .~ commitIndex'
-
-        forM_ nodes' $ \node ->
-            unless (node == self) $
-                sendAppendEntriesRequest node msg
+    sendInitialEmptyAppendEntriesRPCs = sendEmptyAppendEntriesRPCs :: mL ()
 
 onRequestVoteRequest :: ( MonadLogger m
                         , MonadPersistentState m
@@ -176,5 +158,63 @@ onElectionTimeout :: MonadLogger m => m ()
 onElectionTimeout =
     $(logDebug) "Received election timeout in Leader mode, ignoring"
 
-onHeartbeatTimeout :: HasCallStack => a
-onHeartbeatTimeout = error "Not implemented"
+onHeartbeatTimeout :: ( MonadReader config m
+                      , MonadState (volatileState 'Leader) m
+                      , MonadPersistentState m
+                      , MonadRPC m
+                      , MonadTimers m
+                      , VolatileState volatileState
+                      , Config config
+                      , AppendEntriesRequest (RPC.AppendEntriesRequest m)
+                      , Default (RPC.AppendEntriesRequest m)
+                      , Eq (AppendEntriesRequest.Node (RPC.AppendEntriesRequest m))
+                      , Index (AppendEntriesRequest.Index (RPC.AppendEntriesRequest m))
+                      , Term (RPC.Term (RPC.AppendEntriesRequest m))
+                      , Config.Node config ~ RPC.Node m
+                      , Persistent.Term m ~ RPC.Term (RPC.AppendEntriesRequest m)
+                      , Persistent.Index m ~ AppendEntriesRequest.Index (RPC.AppendEntriesRequest m)
+                      , Persistent.Index m ~ Volatile.Index volatileState
+                      , RPC.Node m ~ AppendEntriesRequest.Node (RPC.AppendEntriesRequest m)
+                      )
+                   => m ()
+onHeartbeatTimeout = let Use.Monad{..} = def in do
+    sendEmptyAppendEntriesRPCs
+    startHeartbeatTimer
+
+sendEmptyAppendEntriesRPCs :: ( MonadReader config m
+                              , MonadState (volatileState 'Leader) m
+                              , MonadPersistentState m
+                              , MonadRPC m
+                              , VolatileState volatileState
+                              , Config config
+                              , AppendEntriesRequest (RPC.AppendEntriesRequest m)
+                              , Default (RPC.AppendEntriesRequest m)
+                              , Eq (AppendEntriesRequest.Node (RPC.AppendEntriesRequest m))
+                              , Index (AppendEntriesRequest.Index (RPC.AppendEntriesRequest m))
+                              , Term (RPC.Term (RPC.AppendEntriesRequest m))
+                              , Config.Node config ~ RPC.Node m
+                              , Persistent.Term m ~ RPC.Term (RPC.AppendEntriesRequest m)
+                              , Persistent.Index m ~ AppendEntriesRequest.Index (RPC.AppendEntriesRequest m)
+                              , Persistent.Index m ~ Volatile.Index volatileState
+                              , RPC.Node m ~ AppendEntriesRequest.Node (RPC.AppendEntriesRequest m)
+                              )
+                           => m ()
+sendEmptyAppendEntriesRPCs = let Use.Monad{..} = def in do
+    self <- view localNode
+    nodes' <- view nodes
+    commitIndex' <- use commitIndex
+    term' <- getCurrentTerm
+    (lastLogIndex, lastLogTerm) <- lastLogEntry >>= \case
+        Nothing -> return (index0, term0)
+        Just (lastLogIndex, lastLogTerm, _) -> return (lastLogIndex, lastLogTerm)
+
+    let msg = def & term .~ term'
+                  & leaderId .~ self
+                  & prevLogIndex .~ lastLogIndex
+                  & prevLogTerm .~ lastLogTerm
+                  & entries .~ []
+                  & leaderCommit .~ commitIndex'
+
+    forM_ nodes' $ \node ->
+        unless (node == self) $
+            sendAppendEntriesRequest node msg

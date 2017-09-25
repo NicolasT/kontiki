@@ -48,6 +48,7 @@ import qualified Kontiki.Raft.Classes.RPC.RequestVoteRequest as RequestVoteReque
 import Kontiki.Raft.Classes.RPC.RequestVoteResponse (RequestVoteResponse, voteGranted)
 import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
 import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AppendEntriesRequest
+import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState, getCurrentTerm, setCurrentTerm, lastLogEntry)
 import qualified Kontiki.Raft.Classes.State.Persistent as Persistent
 import Kontiki.Raft.Classes.State.Volatile (Conversion(FollowerToCandidate), Role(Candidate, Follower, Leader), VolatileState, convert, dispatch, votesGranted)
@@ -273,16 +274,25 @@ onRequestVoteResponse sender resp = let Use.IxMonad{..} = def in do
             $(logDebug) "Received RequestVote response for other term, ignoring" :: mCC ()
             wrap
         else
-            voteFor sender
+            if resp ^. voteGranted
+                then voteFor sender
+                else do
+                    $(logDebug) "Vote not granted, ignoring" :: mCC ()
+                    wrap
 
 
 onAppendEntriesRequest :: forall m req resp volatileState mCC mFF.
                           ( IxMonadState m
                           , mCC ~ m (volatileState 'Candidate) (volatileState 'Candidate)
                           , mFF ~ m (volatileState 'Follower) (volatileState 'Follower)
+                          , Monad mFF
                           , MonadLogger mCC
                           , MonadTimers mFF
+                          , MonadPersistentState mFF
                           , VolatileState volatileState
+                          , Default resp
+                          , AppendEntriesResponse resp
+                          , Persistent.Term mFF ~ RPC.Term resp
                           )
                        => req
                        -> m (volatileState 'Candidate) (volatileState 'Follower) resp

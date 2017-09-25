@@ -96,7 +96,7 @@ instance (Monad m, MonadIO m, KatipContext m, MonadBaseControl IO (ReaderT (Clie
     broadcastRequestVoteRequest req = RPCT $ do
         (clients, queue) <- ask
         forM_ (HashMap.toList clients) $ \(node, client) -> async $ do
-            $(logTM) DebugS $ "Sending request: " <> showLS req
+            $(logTM) DebugS $ "Sending RequestVoteRequest (to " <> showLS node <> ") " <> showLS req
             liftIO (Node.nodeRequestVote client (GRPC.ClientNormalRequest req 1 mempty)) >>= \case
                 GRPC.ClientNormalResponse resp _ _ GRPC.StatusOk _ -> do
                     $(logTM) DebugS $ "Response: " <> showLS resp
@@ -110,6 +110,7 @@ instance (Monad m, MonadIO m, KatipContext m, MonadBaseControl IO (ReaderT (Clie
         let client = HashMap.lookup n clients
         case client of
             Just client' -> void $ async $ do
+                $(logTM) DebugS $ "Sending AppendEntriesRequest (to " <> showLS n <> ") " <> showLS req
                 liftIO (Node.nodeAppendEntries client' (GRPC.ClientNormalRequest req 5 mempty)) >>= \case
                     GRPC.ClientNormalResponse resp _ _ GRPC.StatusOk _ -> do
                         $(logTM) DebugS $ "Response: " <> showLS resp

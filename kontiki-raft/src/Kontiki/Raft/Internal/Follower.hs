@@ -17,8 +17,6 @@ module Kontiki.Raft.Internal.Follower (
     , onHeartbeatTimeout
     ) where
 
-import GHC.Stack (HasCallStack)
-
 import Control.Monad (when)
 import Data.Maybe (isNothing)
 
@@ -44,11 +42,12 @@ import Kontiki.Raft.Classes.RPC.RequestVoteResponse (voteGranted)
 import qualified Kontiki.Raft.Classes.RPC.RequestVoteResponse as RVResp
 import Kontiki.Raft.Classes.RPC.AppendEntriesRequest (AppendEntriesRequest)
 import qualified Kontiki.Raft.Classes.RPC.AppendEntriesRequest as AppendEntriesRequest
+import Kontiki.Raft.Classes.RPC.AppendEntriesResponse (AppendEntriesResponse, success)
 import Kontiki.Raft.Classes.State.Persistent (MonadPersistentState(getCurrentTerm, getVotedFor, setVotedFor))
 import qualified Kontiki.Raft.Classes.State.Persistent as P
 import Kontiki.Raft.Classes.State.Volatile (VolatileState)
 import qualified Kontiki.Raft.Classes.State.Volatile as V
-import Kontiki.Raft.Classes.Timers (MonadTimers(startElectionTimer))
+import Kontiki.Raft.Classes.Timers (MonadTimers, cancelElectionTimer, startElectionTimer)
 import qualified Kontiki.Raft.Classes.Types as T
 
 import Kontiki.Raft.Internal.Candidate (convertToCandidate)
@@ -56,16 +55,18 @@ import Kontiki.Raft.Internal.Orphans ()
 import Kontiki.Raft.Internal.State (Some)
 
 convertToFollower :: ( IxMonadState m
+                     , Monad (m (volatileState 'V.Follower) (volatileState 'V.Follower))
                      , MonadTimers (m (volatileState 'V.Follower) (volatileState 'V.Follower))
                      , VolatileState volatileState
                      )
                   => m (volatileState r) (volatileState 'V.Follower) ()
-convertToFollower = imodify (V.convert V.AnyToFollower) >>> startElectionTimer
+convertToFollower = imodify (V.convert V.AnyToFollower) >>> resetElectionTimer
   where
     m >>> n = Ix.ibind (const n) m
 
 onRequestVoteRequest :: ( MonadState (volatileState 'V.Follower) m
                         , MonadPersistentState m
+                        , MonadTimers m
                         , RequestVoteRequest req
                         , RVResp.RequestVoteResponse resp
                         , Default resp
@@ -94,6 +95,8 @@ onRequestVoteRequest req = do
                     candidateLogUpToDate <- isCandidateLogUpToDate req
                     when (isNothing vf && candidateLogUpToDate) $
                         setVotedFor (Just node)
+                    when candidateLogUpToDate $
+                        resetElectionTimer
 
                     return $ def & term .~ currentTerm
                                  & voteGranted .~ candidateLogUpToDate
@@ -109,10 +112,21 @@ onRequestVoteResponse :: ( MonadLogger m
 onRequestVoteResponse _ _ =
     $(logDebug) "Received RequestVote response in Follower mode, ignoring"
 
-onAppendEntriesRequest :: HasCallStack
+onAppendEntriesRequest :: ( Monad m
+                          , MonadTimers m
+                          , MonadPersistentState m
+                          , P.Term m ~ RPC.Term resp
+                          , Default resp
+                          , AppendEntriesResponse resp
+                          )
                        => req
                        -> m resp
-onAppendEntriesRequest _ = error "Not implemented"
+onAppendEntriesRequest _ = do
+    resetElectionTimer
+
+    term' <- getCurrentTerm
+    return $ def & term .~ term'
+                 & success .~ False
 
 onAppendEntriesResponse :: ( MonadLogger m
                            )
@@ -165,3 +179,9 @@ onHeartbeatTimeout :: ( MonadLogger m
                    => m ()
 onHeartbeatTimeout =
     $(logDebug) "Heartbeat timeout in Follower mode, ignoring"
+
+
+resetElectionTimer :: (Monad m, MonadTimers m) => m ()
+resetElectionTimer = do
+    cancelElectionTimer
+    startElectionTimer
