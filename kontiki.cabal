@@ -20,6 +20,8 @@ Stability:          experimental
 
 Extra-Doc-Files:    CHANGELOG.md
 
+Tested-With:        GHC ==8.10.5
+
 Source-Repository head
   Type:             git
   Location:         https://github.com/NicolasT/kontiki.git
