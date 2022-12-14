@@ -1,0 +1,15 @@
+---
+name: Codestyle
+on:
+  - push
+  - pull_request
+
+jobs:
+  ormolu:
+    name: Lint code layout using Ormolu
+    runs-on: ubuntu-20.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: ormolu
+        uses: mrkkrp/ormolu-action@v8
